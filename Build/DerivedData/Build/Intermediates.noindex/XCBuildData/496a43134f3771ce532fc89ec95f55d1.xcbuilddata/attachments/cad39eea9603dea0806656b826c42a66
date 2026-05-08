@@ -1,0 +1,159 @@
+{
+  "" : {
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/Downloader-primary.dia",
+    "emit-module-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/Downloader-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/Downloader-primary-emit-module.dia",
+    "pch" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/Downloader-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/Downloader-primary.swiftdeps"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/App/DownloaderApp.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloaderApp.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloaderApp.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloaderApp.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloaderApp.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloaderApp.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloaderApp.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloaderApp.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloaderApp~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/BrowserIntegration/URLSchemeHandler.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/URLSchemeHandler.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/URLSchemeHandler.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/URLSchemeHandler.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/URLSchemeHandler.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/URLSchemeHandler.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/URLSchemeHandler.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/URLSchemeHandler.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/URLSchemeHandler~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/Core/DownloadItem.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadItem.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadItem.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadItem.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadItem.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadItem.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadItem.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadItem.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadItem~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/Core/DownloadManager.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadManager.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadManager.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadManager.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadManager.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadManager.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadManager.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadManager.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadManager~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/HTTP/HTTPDownloadEngine.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/HTTPDownloadEngine.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/HTTPDownloadEngine.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/HTTPDownloadEngine.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/HTTPDownloadEngine.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/HTTPDownloadEngine.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/HTTPDownloadEngine.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/HTTPDownloadEngine.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/HTTPDownloadEngine~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/Notifications/NotificationManager.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/NotificationManager.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/NotificationManager.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/NotificationManager.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/NotificationManager.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/NotificationManager.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/NotificationManager.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/NotificationManager.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/NotificationManager~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/Persistence/DownloadStore.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadStore.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadStore.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadStore.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadStore.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadStore.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadStore.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadStore.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadStore~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/Persistence/FolderBookmarkStore.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/FolderBookmarkStore.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/FolderBookmarkStore.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/FolderBookmarkStore.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/FolderBookmarkStore.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/FolderBookmarkStore.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/FolderBookmarkStore.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/FolderBookmarkStore.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/FolderBookmarkStore~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/Torrent/TorrentDownloadEngine.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentDownloadEngine.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentDownloadEngine.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentDownloadEngine.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentDownloadEngine.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentDownloadEngine.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentDownloadEngine.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentDownloadEngine.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentDownloadEngine~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/Torrent/TorrentManager.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentManager.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentManager.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentManager.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentManager.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentManager.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentManager.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentManager.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/TorrentManager~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/UI/AddDownloadSheet.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/AddDownloadSheet.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/AddDownloadSheet.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/AddDownloadSheet.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/AddDownloadSheet.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/AddDownloadSheet.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/AddDownloadSheet.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/AddDownloadSheet.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/AddDownloadSheet~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/UI/ContentView.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/UI/DownloadsListView.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadsListView.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadsListView.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadsListView.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadsListView.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadsListView.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadsListView.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadsListView.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/DownloadsListView~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/UI/SettingsView.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SettingsView.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SettingsView.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SettingsView~partial.swiftmodule"
+  },
+  "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/UI/SidebarView.swift" : {
+    "const-values" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SidebarView.swiftconstvalues",
+    "dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SidebarView.d",
+    "diagnostics" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SidebarView.dia",
+    "index-unit-output-path" : "/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SidebarView.o",
+    "llvm-bc" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SidebarView.bc",
+    "object" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SidebarView.o",
+    "swift-dependencies" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SidebarView.swiftdeps",
+    "swiftmodule" : "/Users/sunnyyu/Documents/Xcode/Downloader/Build/DerivedData/Build/Intermediates.noindex/Downloader.build/Debug/Downloader.build/Objects-normal/arm64/SidebarView~partial.swiftmodule"
+  }
+}

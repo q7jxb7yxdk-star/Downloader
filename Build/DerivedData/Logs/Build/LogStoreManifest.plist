@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>logFormatVersion</key>
+	<integer>12</integer>
+	<key>logs</key>
+	<dict>
+		<key>D1A6BEE8-04B6-468D-84DB-557547980546</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>D1A6BEE8-04B6-468D-84DB-557547980546.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>S</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>0</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>Downloader project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>Downloader</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project Downloader with scheme Downloader and configuration Debug</string>
+			<key>timeStartedRecording</key>
+			<real>799937011.00889099</real>
+			<key>timeStoppedRecording</key>
+			<real>799937011.43741906</real>
+			<key>title</key>
+			<string>Building project Downloader with scheme Downloader and configuration Debug</string>
+			<key>uniqueIdentifier</key>
+			<string>D1A6BEE8-04B6-468D-84DB-557547980546</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

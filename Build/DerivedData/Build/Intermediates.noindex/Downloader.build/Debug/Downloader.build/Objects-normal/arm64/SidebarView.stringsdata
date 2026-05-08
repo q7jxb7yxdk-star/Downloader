@@ -1,0 +1,16 @@
+{
+  "source": "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/UI/SidebarView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Downloads",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 31
+        }
+      }
+    ]
+  },
+  "version": 1
+}

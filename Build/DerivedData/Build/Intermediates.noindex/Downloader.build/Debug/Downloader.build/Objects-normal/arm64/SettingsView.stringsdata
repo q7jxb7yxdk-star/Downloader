@@ -1,0 +1,24 @@
+{
+  "source": "/Users/sunnyyu/Documents/Xcode/Downloader/Downloader/UI/SettingsView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Concurrent downloads: %lld",
+        "location": {
+          "startingColumn": 21,
+          "startingLine": 9
+        }
+      },
+      {
+        "comment": "",
+        "key": "Speed limit: %@",
+        "location": {
+          "startingColumn": 21,
+          "startingLine": 10
+        }
+      }
+    ]
+  },
+  "version": 1
+}
