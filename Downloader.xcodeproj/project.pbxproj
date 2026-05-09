@@ -25,6 +25,8 @@
 				AA0000010000000000000016 /* TorrentDownloadEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000121 /* TorrentDownloadEngine.swift */; };
 				AA0000010000000000000017 /* libtorrent-rasterbar.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000123 /* libtorrent-rasterbar.xcframework */; };
 				AA0000010000000000000018 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000124 /* SystemConfiguration.framework */; };
+		AA0000010000000000000019 /* TorrentFileSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000125 /* TorrentFileSelection.swift */; };
+		AA0000010000000000000020 /* TorrentFileSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000126 /* TorrentFileSelectionSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -53,6 +55,8 @@
 				AA0000010000000000000122 /* Downloader-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Downloader-Bridging-Header.h"; sourceTree = "<group>"; };
 				AA0000010000000000000123 /* libtorrent-rasterbar.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "Vendor/Libtorrent/libtorrent-rasterbar.xcframework"; sourceTree = SOURCE_ROOT; };
 				AA0000010000000000000124 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
+		AA0000010000000000000125 /* TorrentFileSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentFileSelection.swift; sourceTree = "<group>"; };
+		AA0000010000000000000126 /* TorrentFileSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/TorrentFileSelectionSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,8 +97,10 @@
 				AA0000010000000000000109 /* HTTPDownloadEngine.swift */,
 				AA0000010000000000000110 /* TorrentManager.swift */,
 				AA0000010000000000000121 /* TorrentDownloadEngine.swift */,
+				AA0000010000000000000125 /* TorrentFileSelection.swift */,
 				AA0000010000000000000116 /* TorrentSessionBridge.h */,
 				AA0000010000000000000117 /* TorrentSessionBridge.mm */,
+				AA0000010000000000000126 /* TorrentFileSelectionSheet.swift */,
 				AA0000010000000000000111 /* URLSchemeHandler.swift */,
 				AA0000010000000000000112 /* DownloadStore.swift */,
 				AA0000010000000000000120 /* FolderBookmarkStore.swift */,
@@ -208,6 +214,8 @@
 				AA0000010000000000000014 /* FolderBookmarkStore.swift in Sources */,
 				AA0000010000000000000015 /* TorrentSessionBridge.mm in Sources */,
 				AA0000010000000000000016 /* TorrentDownloadEngine.swift in Sources */,
+				AA0000010000000000000019 /* TorrentFileSelection.swift in Sources */,
+				AA0000010000000000000020 /* TorrentFileSelectionSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
