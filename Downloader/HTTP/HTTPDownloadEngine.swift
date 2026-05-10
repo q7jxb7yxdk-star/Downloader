@@ -460,7 +460,7 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
 
     /// 任務完成或失敗 callback。
     ///
-    /// 分段全部完成後會合併檔案；單連線失敗會重試；分段失敗會退回單連線。
+    /// 分段全部完成後會合併檔案；單連線失敗會重試；分段失敗只重試該段。
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         defer {
             taskPurposes[task.taskIdentifier] = nil
@@ -477,8 +477,8 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
                     return
                 }
                 retrySingleDownload(id: id, error: error)
-            case let .segment(id, _):
-                retryAsSingleDownload(id: id, error: error)
+            case let .segment(id, index):
+                retrySegmentDownload(id: id, index: index, error: error)
             case nil:
                 break
             }
@@ -793,17 +793,42 @@ private extension HTTPDownloadEngine {
         startSingleDownload(item: item)
     }
 
-    /// 分段下載如果 server 中途斷線，退回單連線較穩定。
-    func retryAsSingleDownload(id: DownloadItem.ID, error: Error) {
-        guard let item = itemsByID[id] else {
+    /// 分段下載其中一段失敗時，只重試該段。
+    ///
+    /// 這樣下載一旦成功升級成 4 connections，就會保持分段模式；
+    /// 不會因為某一段短暫斷線而整個退回 1 connection。
+    func retrySegmentDownload(id: DownloadItem.ID, index: Int, error: Error) {
+        guard var state = segmentedDownloads[id],
+              var segment = state.segments[index]
+        else {
             fail(id: id, error: error)
             return
         }
 
-        cleanupSegmentedDownload(id: id)
-        retryCounts[id] = 0
-        notifyStatus(id: id, message: "Retrying with single connection")
-        startSingleDownload(item: item)
+        let nextRetry = (retryCounts[id] ?? 0) + 1
+        guard nextRetry <= Self.maximumRetryCount else {
+            fail(id: id, error: error)
+            return
+        }
+
+        retryCounts[id] = nextRetry
+
+        let nextByte = segment.range.lowerBound + segment.received
+        guard nextByte <= segment.range.upperBound else {
+            segment.isFinished = true
+            state.segments[index] = segment
+            segmentedDownloads[id] = state
+            return
+        }
+
+        var request = downloadRequest(for: state.item.source)
+        request.setValue("bytes=\(nextByte)-\(segment.range.upperBound)", forHTTPHeaderField: "Range")
+
+        let task = session.dataTask(with: request)
+        taskPurposes[task.taskIdentifier] = .segment(id, index)
+        dataTasksByID[id, default: []].append(task)
+        notifyStatus(id: id, message: "\(Self.segmentedThreadCount) connections")
+        task.resume()
     }
 
     /// 建立下載 request，集中設定 User-Agent、Accept、timeout。

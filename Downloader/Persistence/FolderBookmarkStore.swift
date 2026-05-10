@@ -14,7 +14,14 @@ enum FolderBookmarkStore {
 
     /// 讀取上次選擇的資料夾；如果 bookmark 壞了，就回到 Downloads。
     static func lastFolder() -> URL {
-        guard let data = UserDefaults.standard.data(forKey: bookmarkKey) else {
+        guard let storedValue = UserDefaults.standard.object(forKey: bookmarkKey) else {
+            return fallbackFolder
+        }
+
+        guard let data = storedValue as? Data else {
+            // 舊版本或測試時如果曾把非 Data 值寫進同一個 key，
+            // `UserDefaults.data(forKey:)` 可能在系統內部把它當 NSData 問 `.count` 而 crash。
+            UserDefaults.standard.removeObject(forKey: bookmarkKey)
             return fallbackFolder
         }
 

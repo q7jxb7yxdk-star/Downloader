@@ -7,64 +7,122 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AA0000010000000000000001 /* DownloaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000101 /* DownloaderApp.swift */; };
-		AA0000010000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000102 /* ContentView.swift */; };
-		AA0000010000000000000003 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000103 /* SidebarView.swift */; };
-		AA0000010000000000000004 /* DownloadsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000104 /* DownloadsListView.swift */; };
-		AA0000010000000000000005 /* AddDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000105 /* AddDownloadSheet.swift */; };
-		AA0000010000000000000006 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000106 /* SettingsView.swift */; };
-		AA0000010000000000000007 /* DownloadItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000107 /* DownloadItem.swift */; };
-		AA0000010000000000000008 /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000108 /* DownloadManager.swift */; };
-		AA0000010000000000000009 /* HTTPDownloadEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000109 /* HTTPDownloadEngine.swift */; };
-		AA0000010000000000000010 /* TorrentManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000110 /* TorrentManager.swift */; };
-		AA0000010000000000000011 /* URLSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000111 /* URLSchemeHandler.swift */; };
-		AA0000010000000000000012 /* DownloadStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000112 /* DownloadStore.swift */; };
-		AA0000010000000000000013 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000113 /* NotificationManager.swift */; };
-		AA0000010000000000000014 /* FolderBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000120 /* FolderBookmarkStore.swift */; };
-		AA0000010000000000000015 /* TorrentSessionBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000117 /* TorrentSessionBridge.mm */; };
-				AA0000010000000000000016 /* TorrentDownloadEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000121 /* TorrentDownloadEngine.swift */; };
-				AA0000010000000000000017 /* libtorrent-rasterbar.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000123 /* libtorrent-rasterbar.xcframework */; };
-				AA0000010000000000000018 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000124 /* SystemConfiguration.framework */; };
-		AA0000010000000000000019 /* TorrentFileSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000125 /* TorrentFileSelection.swift */; };
-		AA0000010000000000000020 /* TorrentFileSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000126 /* TorrentFileSelectionSheet.swift */; };
+		96A40A8F2FB0249000F5D6C9 /* Downloader Safari Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 96A40A772FB0249000F5D6C9 /* Downloader Safari Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA0000010000000000000001 /* App/DownloaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000101 /* App/DownloaderApp.swift */; };
+		AA0000010000000000000002 /* UI/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000102 /* UI/ContentView.swift */; };
+		AA0000010000000000000003 /* UI/SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000103 /* UI/SidebarView.swift */; };
+		AA0000010000000000000004 /* UI/DownloadsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000104 /* UI/DownloadsListView.swift */; };
+		AA0000010000000000000005 /* UI/AddDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000105 /* UI/AddDownloadSheet.swift */; };
+		AA0000010000000000000006 /* UI/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000106 /* UI/SettingsView.swift */; };
+		AA0000010000000000000007 /* Core/DownloadItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000107 /* Core/DownloadItem.swift */; };
+		AA0000010000000000000008 /* Core/DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000108 /* Core/DownloadManager.swift */; };
+		AA0000010000000000000009 /* HTTP/HTTPDownloadEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000109 /* HTTP/HTTPDownloadEngine.swift */; };
+		AA0000010000000000000010 /* Torrent/TorrentManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000110 /* Torrent/TorrentManager.swift */; };
+		AA0000010000000000000011 /* BrowserIntegration/URLSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000111 /* BrowserIntegration/URLSchemeHandler.swift */; };
+		AA0000010000000000000012 /* Persistence/DownloadStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000112 /* Persistence/DownloadStore.swift */; };
+		AA0000010000000000000013 /* Notifications/NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000113 /* Notifications/NotificationManager.swift */; };
+		AA0000010000000000000014 /* Persistence/FolderBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000120 /* Persistence/FolderBookmarkStore.swift */; };
+		AA0000010000000000000015 /* Torrent/TorrentSessionBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000117 /* Torrent/TorrentSessionBridge.mm */; };
+		AA0000010000000000000016 /* Torrent/TorrentDownloadEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000121 /* Torrent/TorrentDownloadEngine.swift */; };
+		AA0000010000000000000017 /* Vendor/Libtorrent/libtorrent-rasterbar.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000123 /* Vendor/Libtorrent/libtorrent-rasterbar.xcframework */; };
+		AA0000010000000000000018 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000124 /* SystemConfiguration.framework */; };
+		AA0000010000000000000019 /* Torrent/TorrentFileSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000125 /* Torrent/TorrentFileSelection.swift */; };
+		AA0000010000000000000020 /* UI/TorrentFileSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000126 /* UI/TorrentFileSelectionSheet.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		96A40A8D2FB0249000F5D6C9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA0000010000000000000600 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 96A40A762FB0249000F5D6C9;
+			remoteInfo = "Downloader Safari Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		96A40A902FB0249000F5D6C9 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				96A40A8F2FB0249000F5D6C9 /* Downloader Safari Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		96A40A772FB0249000F5D6C9 /* Downloader Safari Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Downloader Safari Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000010000000000000100 /* Downloader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Downloader.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AA0000010000000000000101 /* DownloaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/DownloaderApp.swift; sourceTree = "<group>"; };
-		AA0000010000000000000102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/ContentView.swift; sourceTree = "<group>"; };
-		AA0000010000000000000103 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/SidebarView.swift; sourceTree = "<group>"; };
-		AA0000010000000000000104 /* DownloadsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/DownloadsListView.swift; sourceTree = "<group>"; };
-		AA0000010000000000000105 /* AddDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/AddDownloadSheet.swift; sourceTree = "<group>"; };
-		AA0000010000000000000106 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/SettingsView.swift; sourceTree = "<group>"; };
-		AA0000010000000000000107 /* DownloadItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/DownloadItem.swift; sourceTree = "<group>"; };
-		AA0000010000000000000108 /* DownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/DownloadManager.swift; sourceTree = "<group>"; };
-		AA0000010000000000000109 /* HTTPDownloadEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTP/HTTPDownloadEngine.swift; sourceTree = "<group>"; };
-		AA0000010000000000000110 /* TorrentManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentManager.swift; sourceTree = "<group>"; };
-		AA0000010000000000000111 /* URLSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserIntegration/URLSchemeHandler.swift; sourceTree = "<group>"; };
-		AA0000010000000000000112 /* DownloadStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/DownloadStore.swift; sourceTree = "<group>"; };
-		AA0000010000000000000113 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications/NotificationManager.swift; sourceTree = "<group>"; };
+		AA0000010000000000000101 /* App/DownloaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/DownloaderApp.swift; sourceTree = "<group>"; };
+		AA0000010000000000000102 /* UI/ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/ContentView.swift; sourceTree = "<group>"; };
+		AA0000010000000000000103 /* UI/SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/SidebarView.swift; sourceTree = "<group>"; };
+		AA0000010000000000000104 /* UI/DownloadsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/DownloadsListView.swift; sourceTree = "<group>"; };
+		AA0000010000000000000105 /* UI/AddDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/AddDownloadSheet.swift; sourceTree = "<group>"; };
+		AA0000010000000000000106 /* UI/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/SettingsView.swift; sourceTree = "<group>"; };
+		AA0000010000000000000107 /* Core/DownloadItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/DownloadItem.swift; sourceTree = "<group>"; };
+		AA0000010000000000000108 /* Core/DownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core/DownloadManager.swift; sourceTree = "<group>"; };
+		AA0000010000000000000109 /* HTTP/HTTPDownloadEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTP/HTTPDownloadEngine.swift; sourceTree = "<group>"; };
+		AA0000010000000000000110 /* Torrent/TorrentManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentManager.swift; sourceTree = "<group>"; };
+		AA0000010000000000000111 /* BrowserIntegration/URLSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserIntegration/URLSchemeHandler.swift; sourceTree = "<group>"; };
+		AA0000010000000000000112 /* Persistence/DownloadStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/DownloadStore.swift; sourceTree = "<group>"; };
+		AA0000010000000000000113 /* Notifications/NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications/NotificationManager.swift; sourceTree = "<group>"; };
 		AA0000010000000000000114 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA0000010000000000000115 /* Downloader.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Downloader.entitlements; sourceTree = "<group>"; };
-		AA0000010000000000000116 /* TorrentSessionBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Torrent/TorrentSessionBridge.h; sourceTree = "<group>"; };
-		AA0000010000000000000117 /* TorrentSessionBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = Torrent/TorrentSessionBridge.mm; sourceTree = "<group>"; };
+		AA0000010000000000000116 /* Torrent/TorrentSessionBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Torrent/TorrentSessionBridge.h; sourceTree = "<group>"; };
+		AA0000010000000000000117 /* Torrent/TorrentSessionBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = Torrent/TorrentSessionBridge.mm; sourceTree = "<group>"; };
 		AA0000010000000000000118 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
 		AA0000010000000000000119 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
-		AA0000010000000000000120 /* FolderBookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/FolderBookmarkStore.swift; sourceTree = "<group>"; };
-		AA0000010000000000000121 /* TorrentDownloadEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentDownloadEngine.swift; sourceTree = "<group>"; };
-				AA0000010000000000000122 /* Downloader-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Downloader-Bridging-Header.h"; sourceTree = "<group>"; };
-				AA0000010000000000000123 /* libtorrent-rasterbar.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "Vendor/Libtorrent/libtorrent-rasterbar.xcframework"; sourceTree = SOURCE_ROOT; };
-				AA0000010000000000000124 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
-		AA0000010000000000000125 /* TorrentFileSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentFileSelection.swift; sourceTree = "<group>"; };
-		AA0000010000000000000126 /* TorrentFileSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/TorrentFileSelectionSheet.swift; sourceTree = "<group>"; };
+		AA0000010000000000000120 /* Persistence/FolderBookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/FolderBookmarkStore.swift; sourceTree = "<group>"; };
+		AA0000010000000000000121 /* Torrent/TorrentDownloadEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentDownloadEngine.swift; sourceTree = "<group>"; };
+		AA0000010000000000000122 /* Downloader-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Downloader-Bridging-Header.h"; sourceTree = "<group>"; };
+		AA0000010000000000000123 /* Vendor/Libtorrent/libtorrent-rasterbar.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "Vendor/Libtorrent/libtorrent-rasterbar.xcframework"; sourceTree = SOURCE_ROOT; };
+		AA0000010000000000000124 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
+		AA0000010000000000000125 /* Torrent/TorrentFileSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentFileSelection.swift; sourceTree = "<group>"; };
+		AA0000010000000000000126 /* UI/TorrentFileSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/TorrentFileSelectionSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		96A40A932FB0249000F5D6C9 /* Exceptions for "Downloader Safari Extension" folder in "Downloader Safari Extension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 96A40A762FB0249000F5D6C9 /* Downloader Safari Extension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		96A40A782FB0249000F5D6C9 /* Downloader Safari Extension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				96A40A932FB0249000F5D6C9 /* Exceptions for "Downloader Safari Extension" folder in "Downloader Safari Extension" target */,
+			);
+			explicitFolders = (
+				Resources/_locales,
+				Resources/images,
+			);
+			path = "Downloader Safari Extension";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
+		96A40A742FB0249000F5D6C9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AA0000010000000000000201 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AA0000010000000000000017 /* libtorrent-rasterbar.xcframework in Frameworks */,
+				AA0000010000000000000017 /* Vendor/Libtorrent/libtorrent-rasterbar.xcframework in Frameworks */,
 				AA0000010000000000000018 /* SystemConfiguration.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -77,8 +135,9 @@
 			children = (
 				AA0000010000000000000301 /* Downloader */,
 				AA0000010000000000000302 /* SafariExtension */,
-				AA0000010000000000000123 /* libtorrent-rasterbar.xcframework */,
+				AA0000010000000000000123 /* Vendor/Libtorrent/libtorrent-rasterbar.xcframework */,
 				AA0000010000000000000124 /* SystemConfiguration.framework */,
+				96A40A782FB0249000F5D6C9 /* Downloader Safari Extension */,
 				AA0000010000000000000303 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -86,25 +145,25 @@
 		AA0000010000000000000301 /* Downloader */ = {
 			isa = PBXGroup;
 			children = (
-				AA0000010000000000000101 /* DownloaderApp.swift */,
-				AA0000010000000000000102 /* ContentView.swift */,
-				AA0000010000000000000103 /* SidebarView.swift */,
-				AA0000010000000000000104 /* DownloadsListView.swift */,
-				AA0000010000000000000105 /* AddDownloadSheet.swift */,
-				AA0000010000000000000106 /* SettingsView.swift */,
-				AA0000010000000000000107 /* DownloadItem.swift */,
-				AA0000010000000000000108 /* DownloadManager.swift */,
-				AA0000010000000000000109 /* HTTPDownloadEngine.swift */,
-				AA0000010000000000000110 /* TorrentManager.swift */,
-				AA0000010000000000000121 /* TorrentDownloadEngine.swift */,
-				AA0000010000000000000125 /* TorrentFileSelection.swift */,
-				AA0000010000000000000116 /* TorrentSessionBridge.h */,
-				AA0000010000000000000117 /* TorrentSessionBridge.mm */,
-				AA0000010000000000000126 /* TorrentFileSelectionSheet.swift */,
-				AA0000010000000000000111 /* URLSchemeHandler.swift */,
-				AA0000010000000000000112 /* DownloadStore.swift */,
-				AA0000010000000000000120 /* FolderBookmarkStore.swift */,
-				AA0000010000000000000113 /* NotificationManager.swift */,
+				AA0000010000000000000101 /* App/DownloaderApp.swift */,
+				AA0000010000000000000102 /* UI/ContentView.swift */,
+				AA0000010000000000000103 /* UI/SidebarView.swift */,
+				AA0000010000000000000104 /* UI/DownloadsListView.swift */,
+				AA0000010000000000000105 /* UI/AddDownloadSheet.swift */,
+				AA0000010000000000000106 /* UI/SettingsView.swift */,
+				AA0000010000000000000107 /* Core/DownloadItem.swift */,
+				AA0000010000000000000108 /* Core/DownloadManager.swift */,
+				AA0000010000000000000109 /* HTTP/HTTPDownloadEngine.swift */,
+				AA0000010000000000000110 /* Torrent/TorrentManager.swift */,
+				AA0000010000000000000121 /* Torrent/TorrentDownloadEngine.swift */,
+				AA0000010000000000000125 /* Torrent/TorrentFileSelection.swift */,
+				AA0000010000000000000116 /* Torrent/TorrentSessionBridge.h */,
+				AA0000010000000000000117 /* Torrent/TorrentSessionBridge.mm */,
+				AA0000010000000000000126 /* UI/TorrentFileSelectionSheet.swift */,
+				AA0000010000000000000111 /* BrowserIntegration/URLSchemeHandler.swift */,
+				AA0000010000000000000112 /* Persistence/DownloadStore.swift */,
+				AA0000010000000000000120 /* Persistence/FolderBookmarkStore.swift */,
+				AA0000010000000000000113 /* Notifications/NotificationManager.swift */,
 				AA0000010000000000000122 /* Downloader-Bridging-Header.h */,
 				AA0000010000000000000114 /* Info.plist */,
 				AA0000010000000000000115 /* Downloader.entitlements */,
@@ -118,7 +177,6 @@
 				AA0000010000000000000118 /* manifest.json */,
 				AA0000010000000000000119 /* background.js */,
 			);
-			name = SafariExtension;
 			path = SafariExtension;
 			sourceTree = "<group>";
 		};
@@ -126,6 +184,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000010000000000000100 /* Downloader.app */,
+				96A40A772FB0249000F5D6C9 /* Downloader Safari Extension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -133,6 +192,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		96A40A762FB0249000F5D6C9 /* Downloader Safari Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96A40A942FB0249000F5D6C9 /* Build configuration list for PBXNativeTarget "Downloader Safari Extension" */;
+			buildPhases = (
+				96A40A732FB0249000F5D6C9 /* Sources */,
+				96A40A742FB0249000F5D6C9 /* Frameworks */,
+				96A40A752FB0249000F5D6C9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				96A40A782FB0249000F5D6C9 /* Downloader Safari Extension */,
+			);
+			name = "Downloader Safari Extension";
+			packageProductDependencies = (
+			);
+			productName = "Downloader Safari Extension";
+			productReference = 96A40A772FB0249000F5D6C9 /* Downloader Safari Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		AA0000010000000000000400 /* Downloader */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AA0000010000000000000500 /* Build configuration list for PBXNativeTarget "Downloader" */;
@@ -140,10 +221,12 @@
 				AA0000010000000000000200 /* Sources */,
 				AA0000010000000000000201 /* Frameworks */,
 				AA0000010000000000000202 /* Resources */,
+				96A40A902FB0249000F5D6C9 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				96A40A8E2FB0249000F5D6C9 /* PBXTargetDependency */,
 			);
 			name = Downloader;
 			productName = Downloader;
@@ -160,6 +243,9 @@
 				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					96A40A762FB0249000F5D6C9 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
 					AA0000010000000000000400 = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
@@ -180,11 +266,19 @@
 			projectRoot = "";
 			targets = (
 				AA0000010000000000000400 /* Downloader */,
+				96A40A762FB0249000F5D6C9 /* Downloader Safari Extension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		96A40A752FB0249000F5D6C9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AA0000010000000000000202 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -195,34 +289,123 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		96A40A732FB0249000F5D6C9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AA0000010000000000000200 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AA0000010000000000000001 /* DownloaderApp.swift in Sources */,
-				AA0000010000000000000002 /* ContentView.swift in Sources */,
-				AA0000010000000000000003 /* SidebarView.swift in Sources */,
-				AA0000010000000000000004 /* DownloadsListView.swift in Sources */,
-				AA0000010000000000000005 /* AddDownloadSheet.swift in Sources */,
-				AA0000010000000000000006 /* SettingsView.swift in Sources */,
-				AA0000010000000000000007 /* DownloadItem.swift in Sources */,
-				AA0000010000000000000008 /* DownloadManager.swift in Sources */,
-				AA0000010000000000000009 /* HTTPDownloadEngine.swift in Sources */,
-				AA0000010000000000000010 /* TorrentManager.swift in Sources */,
-				AA0000010000000000000011 /* URLSchemeHandler.swift in Sources */,
-				AA0000010000000000000012 /* DownloadStore.swift in Sources */,
-				AA0000010000000000000013 /* NotificationManager.swift in Sources */,
-				AA0000010000000000000014 /* FolderBookmarkStore.swift in Sources */,
-				AA0000010000000000000015 /* TorrentSessionBridge.mm in Sources */,
-				AA0000010000000000000016 /* TorrentDownloadEngine.swift in Sources */,
-				AA0000010000000000000019 /* TorrentFileSelection.swift in Sources */,
-				AA0000010000000000000020 /* TorrentFileSelectionSheet.swift in Sources */,
+				AA0000010000000000000001 /* App/DownloaderApp.swift in Sources */,
+				AA0000010000000000000002 /* UI/ContentView.swift in Sources */,
+				AA0000010000000000000003 /* UI/SidebarView.swift in Sources */,
+				AA0000010000000000000004 /* UI/DownloadsListView.swift in Sources */,
+				AA0000010000000000000005 /* UI/AddDownloadSheet.swift in Sources */,
+				AA0000010000000000000006 /* UI/SettingsView.swift in Sources */,
+				AA0000010000000000000007 /* Core/DownloadItem.swift in Sources */,
+				AA0000010000000000000008 /* Core/DownloadManager.swift in Sources */,
+				AA0000010000000000000009 /* HTTP/HTTPDownloadEngine.swift in Sources */,
+				AA0000010000000000000010 /* Torrent/TorrentManager.swift in Sources */,
+				AA0000010000000000000011 /* BrowserIntegration/URLSchemeHandler.swift in Sources */,
+				AA0000010000000000000012 /* Persistence/DownloadStore.swift in Sources */,
+				AA0000010000000000000013 /* Notifications/NotificationManager.swift in Sources */,
+				AA0000010000000000000014 /* Persistence/FolderBookmarkStore.swift in Sources */,
+				AA0000010000000000000015 /* Torrent/TorrentSessionBridge.mm in Sources */,
+				AA0000010000000000000016 /* Torrent/TorrentDownloadEngine.swift in Sources */,
+				AA0000010000000000000019 /* Torrent/TorrentFileSelection.swift in Sources */,
+				AA0000010000000000000020 /* UI/TorrentFileSelectionSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		96A40A8E2FB0249000F5D6C9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 96A40A762FB0249000F5D6C9 /* Downloader Safari Extension */;
+			targetProxy = 96A40A8D2FB0249000F5D6C9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		96A40A912FB0249000F5D6C9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Downloader Safari Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Downloader Safari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sunnyyu.Downloader.Downloader-Safari-Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		96A40A922FB0249000F5D6C9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Downloader Safari Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Downloader Safari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sunnyyu.Downloader.Downloader-Safari-Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		AA0000010000000000000700 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -347,6 +530,7 @@
 				CODE_SIGN_ENTITLEMENTS = Downloader/Downloader.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Vendor/Libtorrent",
@@ -366,7 +550,6 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				CURRENT_PROJECT_VERSION = 1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lz",
@@ -389,6 +572,7 @@
 				CODE_SIGN_ENTITLEMENTS = Downloader/Downloader.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Vendor/Libtorrent",
@@ -408,7 +592,6 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				CURRENT_PROJECT_VERSION = 1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lz",
@@ -425,6 +608,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		96A40A942FB0249000F5D6C9 /* Build configuration list for PBXNativeTarget "Downloader Safari Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96A40A912FB0249000F5D6C9 /* Debug */,
+				96A40A922FB0249000F5D6C9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		AA0000010000000000000500 /* Build configuration list for PBXNativeTarget "Downloader" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

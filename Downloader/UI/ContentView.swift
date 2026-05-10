@@ -71,5 +71,14 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .showAddDownload)) { _ in
             showingAddDownload = true
         }
+        // 接收 Safari Extension 送來的 `downloader://add?url=...`。
+        //
+        // Safari 右鍵選單按下 Download with Downloader 時，background.js 會打開這個 URL scheme。
+        // 這裡解析出真正下載 URL，並用上次選擇的資料夾直接建立下載任務。
+        .onOpenURL { incomingURL in
+            guard let downloadURL = URLSchemeHandler.downloadURL(from: incomingURL) else { return }
+            let destination = FolderBookmarkStore.lastFolder()
+            downloadManager.add(url: downloadURL, destination: destination)
+        }
     }
 }
