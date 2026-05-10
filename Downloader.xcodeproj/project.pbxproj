@@ -48,8 +48,8 @@
 		AA0000010000000000000115 /* Downloader.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Downloader.entitlements; sourceTree = "<group>"; };
 		AA0000010000000000000116 /* TorrentSessionBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Torrent/TorrentSessionBridge.h; sourceTree = "<group>"; };
 		AA0000010000000000000117 /* TorrentSessionBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = Torrent/TorrentSessionBridge.mm; sourceTree = "<group>"; };
-		AA0000010000000000000118 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = ../SafariExtension/manifest.json; sourceTree = "<group>"; };
-		AA0000010000000000000119 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = ../SafariExtension/background.js; sourceTree = "<group>"; };
+		AA0000010000000000000118 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = manifest.json; sourceTree = "<group>"; };
+		AA0000010000000000000119 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
 		AA0000010000000000000120 /* FolderBookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/FolderBookmarkStore.swift; sourceTree = "<group>"; };
 		AA0000010000000000000121 /* TorrentDownloadEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentDownloadEngine.swift; sourceTree = "<group>"; };
 				AA0000010000000000000122 /* Downloader-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Downloader-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -119,6 +119,7 @@
 				AA0000010000000000000119 /* background.js */,
 			);
 			name = SafariExtension;
+			path = SafariExtension;
 			sourceTree = "<group>";
 		};
 		AA0000010000000000000303 /* Products */ = {
