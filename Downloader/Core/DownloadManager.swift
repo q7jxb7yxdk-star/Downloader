@@ -10,8 +10,10 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 所有下載項目。`@Published` 會讓 SwiftUI 在資料改變時自動重畫列表。
     @Published var items: [DownloadItem] = []
 
-    /// 目前 Table 選中的任務 id，工具列的開始/暫停/刪除按鈕會使用它。
-    @Published var selectedItemID: DownloadItem.ID?
+    /// 目前 Table 選中的任務 id 集合，工具列的開始/暫停/刪除按鈕會使用它。
+    ///
+    /// `Table` 綁定 `Set<ID>` 時，macOS 就能用 Command-click / Shift-click 多選。
+    @Published var selectedItemIDs: Set<DownloadItem.ID> = []
 
     /// BT 找到 metadata 後用來彈出「選擇檔案」sheet。
     @Published var torrentFileSelection: TorrentFileSelection?
@@ -40,7 +42,7 @@ final class DownloadManager: NSObject, ObservableObject {
             kind: kind
         )
         items.insert(item, at: 0)
-        selectedItemID = item.id
+        selectedItemIDs = [item.id]
         store.save(items)
 
         // DownloadManager 只決定「交給誰」，真正下載細節留給各 engine。
@@ -54,28 +56,28 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// 暫停目前選中的任務。
     func pauseSelected() {
-        guard let selectedItemID, let item = items.first(where: { $0.id == selectedItemID }) else { return }
-        switch item.kind {
-        case .http:
-            httpEngine.pause(id: selectedItemID)
-        case .torrent:
-            torrentEngine.pause(id: selectedItemID)
+        for item in selectedItems where !item.isTrashed {
+            switch item.kind {
+            case .http:
+                httpEngine.pause(id: item.id)
+            case .torrent:
+                torrentEngine.pause(id: item.id)
+            }
+            mark(id: item.id, status: .paused)
         }
-        mark(id: selectedItemID, status: .paused)
     }
 
     /// 繼續目前選中的任務。
     func resumeSelected() {
-        guard let selectedItemID, let item = items.first(where: { $0.id == selectedItemID }) else { return }
-        guard !item.isTrashed else { return }
+        for item in selectedItems where !item.isTrashed {
+            mark(id: item.id, status: .queued)
 
-        mark(id: selectedItemID, status: .queued)
-
-        switch item.kind {
-        case .http:
-            httpEngine.resume(item: item)
-        case .torrent:
-            torrentEngine.resume(item: item)
+            switch item.kind {
+            case .http:
+                httpEngine.resume(item: item)
+            case .torrent:
+                torrentEngine.resume(item: item)
+            }
         }
     }
 
@@ -83,8 +85,9 @@ final class DownloadManager: NSObject, ObservableObject {
     ///
     /// 還原只負責回到原本分類，不會自動開始下載。
     func restoreSelectedFromTrash() {
-        guard let selectedItemID, let item = items.first(where: { $0.id == selectedItemID }), item.isTrashed else { return }
-        restoreFromTrash(item: item)
+        for item in selectedItems where item.isTrashed {
+            restoreFromTrash(item: item)
+        }
     }
 
     /// 刪除目前選中的任務。
@@ -92,31 +95,36 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 這裡採用「軟刪除」：停止正在跑的任務，然後移到 Trash 分類。
     /// 使用者之後可以在 Trash 選中項目再按 Resume 復原。
     func deleteSelected() {
-        guard let selectedItemID, let index = items.firstIndex(where: { $0.id == selectedItemID }) else { return }
-        let item = items[index]
+        let itemsToDelete = selectedItems
+        guard !itemsToDelete.isEmpty else { return }
 
-        if item.isTrashed {
+        if itemsToDelete.allSatisfy(\.isTrashed) {
             permanentlyDeleteSelected()
             return
         }
 
-        if item.status == .downloading || item.status == .queued {
-            switch item.kind {
-            case .http:
-                httpEngine.pause(id: selectedItemID)
-            case .torrent:
-                torrentEngine.pause(id: selectedItemID)
+        for item in itemsToDelete where !item.isTrashed {
+            guard let index = items.firstIndex(where: { $0.id == item.id }) else { continue }
+
+            if item.status == .downloading || item.status == .queued {
+                switch item.kind {
+                case .http:
+                    httpEngine.pause(id: item.id)
+                case .torrent:
+                    torrentEngine.pause(id: item.id)
+                }
             }
+
+            items[index].statusBeforeTrash = item.status
+            items[index].isTrashed = true
+            items[index].bytesPerSecond = 0
+            if item.status == .downloading || item.status == .queued {
+                items[index].status = .paused
+            }
+            items[index].errorMessage = nil
         }
 
-        items[index].statusBeforeTrash = item.status
-        items[index].isTrashed = true
-        items[index].bytesPerSecond = 0
-        if item.status == .downloading || item.status == .queued {
-            items[index].status = .paused
-        }
-        items[index].errorMessage = nil
-        self.selectedItemID = selectedItemID
+        selectedItemIDs = Set(itemsToDelete.map(\.id))
         store.save(items)
     }
 
@@ -124,18 +132,20 @@ final class DownloadManager: NSObject, ObservableObject {
     ///
     /// 只有 item 已經在 Trash 時才會走到這裡；正常列表的 Delete 仍然只是軟刪除。
     private func permanentlyDeleteSelected() {
-        guard let selectedItemID, let index = items.firstIndex(where: { $0.id == selectedItemID }) else { return }
-        let item = items[index]
+        let ids = selectedItemIDs
+        guard !ids.isEmpty else { return }
 
-        switch item.kind {
-        case .http:
-            httpEngine.cancel(id: selectedItemID)
-        case .torrent:
-            torrentEngine.cancel(id: selectedItemID)
+        for item in items where ids.contains(item.id) {
+            switch item.kind {
+            case .http:
+                httpEngine.cancel(id: item.id)
+            case .torrent:
+                torrentEngine.cancel(id: item.id)
+            }
         }
 
-        items.remove(at: index)
-        self.selectedItemID = items.first(where: { $0.isTrashed })?.id ?? items.first?.id
+        items.removeAll { ids.contains($0.id) }
+        selectedItemIDs = Set(items.filter(\.isTrashed).prefix(1).map(\.id))
         store.save(items)
     }
 
@@ -152,7 +162,7 @@ final class DownloadManager: NSObject, ObservableObject {
         guard let index = items.firstIndex(where: { $0.id == itemID }) else { return }
         torrentEngine.cancel(id: itemID)
         items.remove(at: index)
-        selectedItemID = items.first?.id
+        selectedItemIDs = Set(items.prefix(1).map(\.id))
         torrentFileSelection = nil
         store.save(items)
     }
@@ -232,6 +242,11 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].errorMessage = nil
         items[index].bytesPerSecond = 0
         store.save(items)
+    }
+
+    /// 依照目前 Table selection 取出完整項目，並保持列表原本排序。
+    private var selectedItems: [DownloadItem] {
+        items.filter { selectedItemIDs.contains($0.id) }
     }
 
     /// 從 URL 產生列表上顯示的檔名。

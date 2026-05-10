@@ -21,8 +21,9 @@ struct DownloadsListView: View {
     }
 
     var body: some View {
-        // Table 的 selection 綁定到 DownloadManager，toolbar 才知道目前操作哪一項。
-        Table(items, selection: $downloadManager.selectedItemID) {
+        // Table 的 selection 綁定到 DownloadManager，toolbar 才知道目前操作哪些項目。
+        // 綁定 Set<ID> 後，macOS 可用 Command-click / Shift-click 多選。
+        Table(items, selection: $downloadManager.selectedItemIDs) {
             TableColumn("Name") { item in
                 HStack(spacing: 10) {
                     Image(systemName: item.kind.icon)
