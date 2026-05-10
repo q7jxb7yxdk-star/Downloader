@@ -15,8 +15,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let existingApp = otherRunningApps.first {
             existingApp.activate(options: [.activateAllWindows])
-            NSApp.terminate(nil)
+            // URL scheme 可能先開一個新 process，再把 URL 交進來。
+            // 稍微延遲退出，避免還沒收到 URL 就把自己關掉。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                NSApp.terminate(nil)
+            }
         }
+
+        bringDownloaderToFront()
     }
 
     /// Dock 或通知要求重新打開 App 時，只顯示現有視窗。
@@ -27,6 +33,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         sender.activate(ignoringOtherApps: true)
         return false
+    }
+
+    /// 接收 `downloader://...` URL scheme。
+    func application(_ application: NSApplication, open urls: [URL]) {
+        bringDownloaderToFront()
+
+        for url in urls {
+            Task { @MainActor in
+                ExternalDownloadRouter.shared.enqueue(url)
+            }
+        }
+    }
+
+    /// 把 Downloader 視窗帶到最前，避免 URL scheme 只在背景啟動 app。
+    @MainActor
+    private func bringDownloaderToFront() {
+        NSApp.setActivationPolicy(.regular)
+
+        DispatchQueue.main.async {
+            if let window = NSApp.windows.first {
+                window.makeKeyAndOrderFront(nil)
+            }
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+}
+
+/// 暫存外部 URL，直到 SwiftUI ContentView 已準備好處理。
+@MainActor
+final class ExternalDownloadRouter {
+    static let shared = ExternalDownloadRouter()
+
+    private var pendingURLs: [URL] = []
+    private var handler: ((URL) -> Void)?
+
+    private init() {}
+
+    func enqueue(_ url: URL) {
+        if let handler {
+            handler(url)
+        } else {
+            pendingURLs.append(url)
+        }
+    }
+
+    func installHandler(_ handler: @escaping (URL) -> Void) {
+        self.handler = handler
+        let urls = pendingURLs
+        pendingURLs.removeAll()
+        urls.forEach(handler)
+    }
+
+    func removeHandler() {
+        handler = nil
     }
 }
 

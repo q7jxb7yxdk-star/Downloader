@@ -1,16 +1,28 @@
+const menuId = "download-with-downloader";
+
+resetContextMenu();
+
 browser.runtime.onInstalled.addListener(() => {
-  browser.contextMenus.create({
-    id: "download-with-downloader",
-    title: "Download with Downloader",
-    contexts: ["link"]
-  });
+  resetContextMenu();
 });
+browser.runtime.onStartup.addListener(resetContextMenu);
 
 browser.contextMenus.onClicked.addListener((info) => {
-  if (info.menuItemId !== "download-with-downloader" || !info.linkUrl) {
-    return;
+  if (info.menuItemId === menuId && info.linkUrl) {
+    openDownloaderURL(`downloader://add?url=${encodeURIComponent(info.linkUrl)}`);
   }
-
-  const url = `downloader://add?url=${encodeURIComponent(info.linkUrl)}`;
-  browser.tabs.create({ url });
 });
+
+function resetContextMenu() {
+  browser.contextMenus.removeAll().finally(() => {
+    browser.contextMenus.create({
+      id: menuId,
+      title: "Download with Downloader",
+      contexts: ["link"]
+    });
+  });
+}
+
+function openDownloaderURL(url) {
+  browser.tabs.create({ url, active: true });
+}

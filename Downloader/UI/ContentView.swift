@@ -13,6 +13,12 @@ struct ContentView: View {
     /// 控制新增下載 sheet 是否顯示。
     @State private var showingAddDownload = false
 
+    /// Safari extension 用 distributed notification 把下載連結送回 App。
+    @State private var safariDownloadObserver: NSObjectProtocol?
+
+    /// 定期讀取 Safari extension 寫入 App Group 的待加入下載。
+    @State private var safariQueueTimer: Timer?
+
     var body: some View {
         NavigationSplitView {
             SidebarView(selection: $selection)
@@ -76,9 +82,98 @@ struct ContentView: View {
         // Safari 右鍵選單按下 Download with Downloader 時，background.js 會打開這個 URL scheme。
         // 這裡解析出真正下載 URL，並用上次選擇的資料夾直接建立下載任務。
         .onOpenURL { incomingURL in
-            guard let downloadURL = URLSchemeHandler.downloadURL(from: incomingURL) else { return }
-            let destination = FolderBookmarkStore.lastFolder()
-            downloadManager.add(url: downloadURL, destination: destination)
+            handleExternalURL(incomingURL)
+        }
+        .onAppear {
+            flushPendingSafariDownloads()
+
+            if safariQueueTimer == nil {
+                safariQueueTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+                    Task { @MainActor in
+                        flushPendingSafariDownloads()
+                    }
+                }
+            }
+
+            ExternalDownloadRouter.shared.installHandler { incomingURL in
+                handleExternalURL(incomingURL)
+            }
+
+            guard safariDownloadObserver == nil else { return }
+            safariDownloadObserver = DistributedNotificationCenter.default().addObserver(
+                forName: .safariExtensionAddDownload,
+                object: nil,
+                queue: .main
+            ) { notification in
+                guard let link = notification.object as? String,
+                      let downloadURL = URL(string: link)
+                else { return }
+
+                Task { @MainActor in
+                    flushPendingSafariDownloads()
+
+                    let destination = FolderBookmarkStore.lastFolder()
+                    downloadManager.add(url: downloadURL, destination: destination)
+                }
+            }
+        }
+        .onDisappear {
+            safariQueueTimer?.invalidate()
+            safariQueueTimer = nil
+
+            ExternalDownloadRouter.shared.removeHandler()
+
+            if let safariDownloadObserver {
+                DistributedNotificationCenter.default().removeObserver(safariDownloadObserver)
+                self.safariDownloadObserver = nil
+            }
         }
     }
+
+    /// 處理 Safari / URL scheme 傳入的外部 URL。
+    private func handleExternalURL(_ incomingURL: URL) {
+        guard incomingURL.scheme == URLSchemeHandler.scheme else { return }
+
+        // `downloader://authorize` 只用來讓 Safari 完成「允許開啟 Downloader」授權。
+        // 收到後把 app 聚焦即可，不建立下載項目。
+        if incomingURL.host() == "authorize" {
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        guard let downloadURL = URLSchemeHandler.downloadURL(from: incomingURL) else { return }
+        let destination = FolderBookmarkStore.lastFolder()
+        downloadManager.add(url: downloadURL, destination: destination)
+    }
+
+    /// 讀取 Safari native extension 寫入 App Group 的下載 queue。
+    private func flushPendingSafariDownloads() {
+        let appGroupIdentifier = "5FQAB6PY2F.com.sunnyyu.Downloader"
+        let queueFileName = "pending-safari-downloads.json"
+
+        guard let queueURL = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?
+            .appendingPathComponent(queueFileName),
+              let data = try? Data(contentsOf: queueURL),
+              let links = try? JSONDecoder().decode([String].self, from: data),
+              !links.isEmpty
+        else {
+            return
+        }
+
+        if let emptyQueue = try? JSONEncoder().encode([String]()) {
+            try? emptyQueue.write(to: queueURL, options: .atomic)
+        }
+
+        let destination = FolderBookmarkStore.lastFolder()
+        for link in links {
+            guard let url = URL(string: link) else { continue }
+            downloadManager.add(url: url, destination: destination)
+        }
+    }
+}
+
+extension Notification.Name {
+    /// Safari extension native handler 用這個 distributed notification 發送下載連結。
+    static let safariExtensionAddDownload = Notification.Name("com.sunnyyu.Downloader.addDownload")
 }
