@@ -42,12 +42,41 @@ struct DownloadsListView: View {
                     downloadManager.showInFinder(item)
                 }
                 .contextMenu {
+                    if !item.isTrashed {
+                        Button {
+                            downloadManager.selectedItemIDs = [item.id]
+                            downloadManager.resumeSelected()
+                        } label: {
+                            Label("Resume", systemImage: "play.fill")
+                        }
+                        .disabled(item.status == .downloading || item.status == .completed)
+
+                        Button {
+                            downloadManager.selectedItemIDs = [item.id]
+                            downloadManager.pauseSelected()
+                        } label: {
+                            Label("Pause", systemImage: "pause.fill")
+                        }
+                        .disabled(item.status != .downloading && item.status != .queued)
+
+                        Divider()
+                    }
+
                     Button {
                         downloadManager.showInFinder(item)
                     } label: {
                         Label("Show in Finder", systemImage: "folder")
                     }
                     .disabled(item.destination == nil && item.localFileURL == nil)
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        downloadManager.selectedItemIDs = [item.id]
+                        downloadManager.deleteSelected()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
 

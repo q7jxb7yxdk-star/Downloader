@@ -63,6 +63,7 @@ struct ContentView: View {
                             Label("Delete", systemImage: "trash")
                         }
                         .help("Delete")
+                        .disabled(downloadManager.selectedItemIDs.isEmpty)
                     }
                 }
         }

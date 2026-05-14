@@ -118,6 +118,14 @@ struct DownloaderApp: App {
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
+
+            CommandGroup(after: .pasteboard) {
+                Button("Delete Download") {
+                    downloadManager.deleteSelected()
+                }
+                .keyboardShortcut(.delete, modifiers: [])
+                .disabled(downloadManager.selectedItemIDs.isEmpty)
+            }
         }
 
         Settings {
