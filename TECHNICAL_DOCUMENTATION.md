@@ -322,6 +322,59 @@ Download Complete
 | `nw_endpoint_flow_failed_with_error 127.0.0.1` | 本機 loopback 連線失敗 log | 只有下載失敗同時出現才查 |
 | `ViewBridge to RemoteViewService Terminated` | NSOpenPanel 等系統視窗關閉 | 通常不用 |
 
+## 下載測試 URL
+
+### httpbin
+
+可自訂位元組數的下載端點：
+
+```text
+https://httpbin.org/bytes/<bytes>
+```
+
+可串流下載測試：
+
+```text
+https://httpbin.org/stream-bytes/<bytes>
+```
+
+常用測試大小：
+
+| 大小 | 位元組 | 測試 URL |
+| --- | ---: | --- |
+| 1 KB | 1,024 B | `https://httpbin.org/bytes/1024` |
+| 1 MB | 1,048,576 B | `https://httpbin.org/bytes/1048576` |
+| 10 MB | 10,485,760 B | `https://httpbin.org/bytes/10485760` |
+| 100 MB | 104,857,600 B | `https://httpbin.org/bytes/104857600` |
+| 1 GB | 1,073,741,824 B | `https://httpbin.org/bytes/1073741824` |
+
+容量換算：
+
+```text
+1 KB = 1024 B
+1 MB = 1024 x 1024 = 1,048,576 B
+10 MB = 10 x 1024 x 1024 = 10,485,760 B
+100 MB = 100 x 1024 x 1024 = 104,857,600 B
+1 GB = 1024 x 1024 x 1024 = 1,073,741,824 B
+```
+
+### Hetzner
+
+網頁文件下載測試：
+
+[https://ash-speed.hetzner.com/](https://ash-speed.hetzner.com/)
+
+## Safari Extension 清理
+
+如果 Safari Extension 曾經出現同名、舊版本或冇用的 `Downloader Extension`，可以先刪除 Xcode 產生的 DerivedData。Xcode 按 Run / Build 後會重新產生這些資料夾。
+
+```zsh
+rm -rf ~/Documents/Xcode/Downloader/Build/DerivedData
+rm -rf ~/Library/Developer/Xcode/DerivedData/Downloader-fkmjpusihrlgzaeuymdzbrsrgavk
+```
+
+刪除後重新 Run / Build，Safari Extension 列表會較容易只留下目前 project 產生的版本。
+
 ## 之後可以改進的方向
 
 - 實作真正的全域同時下載數限制。
