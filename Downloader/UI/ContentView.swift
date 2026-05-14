@@ -148,7 +148,7 @@ struct ContentView: View {
 
     /// 讀取 Safari native extension 寫入 App Group 的下載 queue。
     private func flushPendingSafariDownloads() {
-        let appGroupIdentifier = "5FQAB6PY2F.com.sunnyyu.Downloader"
+        let appGroupIdentifier = "group.com.sunnyyu.Downloader"
         let queueFileName = "pending-safari-downloads.json"
 
         guard let queueURL = FileManager.default

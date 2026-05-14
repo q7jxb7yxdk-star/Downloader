@@ -9,7 +9,7 @@ import SafariServices
 import os.log
 
 class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
-    private let appGroupIdentifier = "5FQAB6PY2F.com.sunnyyu.Downloader"
+    private let appGroupIdentifier = "group.com.sunnyyu.Downloader"
     private let queueFileName = "pending-safari-downloads.json"
 
     func beginRequest(with context: NSExtensionContext) {

@@ -10,7 +10,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>5FQAB6PY2F.com.sunnyyu.Downloader</string>
+		<string>group.com.sunnyyu.Downloader</string>
 	</array>
 	<key>com.apple.security.network.client</key>
 	<true/>

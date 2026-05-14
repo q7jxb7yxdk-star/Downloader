@@ -28,6 +28,7 @@
 		AA0000010000000000000018 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000124 /* SystemConfiguration.framework */; };
 		AA0000010000000000000019 /* Torrent/TorrentFileSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000125 /* Torrent/TorrentFileSelection.swift */; };
 		AA0000010000000000000020 /* UI/TorrentFileSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000126 /* UI/TorrentFileSelectionSheet.swift */; };
+		AA0000010000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000127 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,6 +84,7 @@
 		AA0000010000000000000124 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 		AA0000010000000000000125 /* Torrent/TorrentFileSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentFileSelection.swift; sourceTree = "<group>"; };
 		AA0000010000000000000126 /* UI/TorrentFileSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/TorrentFileSelectionSheet.swift; sourceTree = "<group>"; };
+		AA0000010000000000000127 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -165,6 +167,7 @@
 				AA0000010000000000000120 /* Persistence/FolderBookmarkStore.swift */,
 				AA0000010000000000000113 /* Notifications/NotificationManager.swift */,
 				AA0000010000000000000122 /* Downloader-Bridging-Header.h */,
+				AA0000010000000000000127 /* Assets.xcassets */,
 				AA0000010000000000000114 /* Info.plist */,
 				AA0000010000000000000115 /* Downloader.entitlements */,
 			);
@@ -283,6 +286,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA0000010000000000000021 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -336,12 +340,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_ENTITLEMENTS = "Downloader Safari Extension/Downloader Safari Extension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 20260514;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = WX793X49GJ;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -378,12 +383,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_ENTITLEMENTS = "Downloader Safari Extension/Downloader Safari Extension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 20260514;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = WX793X49GJ;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -553,7 +559,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 20260514;
 				DEAD_CODE_STRIPPING = YES;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				DEVELOPMENT_TEAM = WX793X49GJ;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Vendor/Libtorrent",
@@ -600,7 +606,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 20260514;
 				DEAD_CODE_STRIPPING = YES;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				DEVELOPMENT_TEAM = WX793X49GJ;
 				"EXCLUDED_ARCHS[sdk=macosx*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
