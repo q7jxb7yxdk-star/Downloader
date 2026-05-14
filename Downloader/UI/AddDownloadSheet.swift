@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 新增下載的 sheet。
 ///
@@ -25,6 +26,13 @@ struct AddDownloadSheet: View {
 
             TextField("URL or magnet link", text: $urlText)
                 .textFieldStyle(.roundedBorder)
+
+            Button {
+                chooseTorrentFile()
+            } label: {
+                Label("Choose .torrent File", systemImage: "doc.badge.plus")
+            }
+            .help("Choose .torrent File")
 
             HStack {
                 Text(destination.path(percentEncoded: false))
@@ -75,6 +83,22 @@ struct AddDownloadSheet: View {
             destination = url
             // 保存 bookmark，之後下載 engine 才能在 sandbox 下寫入這個資料夾。
             FolderBookmarkStore.save(folder: url)
+        }
+    }
+
+    /// 打開 `.torrent` 檔案選擇器，直接把檔案 URL 交給 BT engine。
+    private func chooseTorrentFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [UTType(filenameExtension: "torrent") ?? .data]
+
+        if panel.runModal() == .OK {
+            guard let url = panel.url else { return }
+            FolderBookmarkStore.save(folder: destination)
+            downloadManager.add(url: url, destination: destination)
+            dismiss()
         }
     }
 

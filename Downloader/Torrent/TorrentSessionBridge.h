@@ -9,6 +9,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface TorrentSessionBridge : NSObject
 /// Adds a magnet link to libtorrent and returns an identifier used by later calls.
 - (nullable NSString *)startMagnet:(NSString *)magnetURI savePath:(NSString *)savePath error:(NSError **)error;
+/// Adds a .torrent file to libtorrent and returns an identifier used by later calls.
+- (nullable NSString *)startTorrentFile:(NSString *)torrentFilePath savePath:(NSString *)savePath error:(NSError **)error;
 /// Pauses a torrent.
 - (void)pause:(NSString *)identifier;
 /// Resumes a torrent and reannounces it to trackers/DHT/LSD.

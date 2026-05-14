@@ -43,15 +43,19 @@ final class TorrentDownloadEngine {
         self.delegate = delegate
     }
 
-    /// 開始 magnet 下載。
+    /// 開始 magnet 或 `.torrent` 檔案下載。
     func start(item: DownloadItem) {
         let folder = item.destination ?? FolderBookmarkStore.fallbackFolder
         let hasSecurityScope = folder.startAccessingSecurityScopedResource()
 
         let torrentID: String
         do {
-            // startMagnet 會先用 upload_mode，讓 libtorrent 找 metadata/peer，但盡量不下載檔案 payload。
-            torrentID = try bridge.startMagnet(item.source.absoluteString, savePath: folder.path)
+            // 兩種來源都先用 upload_mode，讓使用者選檔前盡量不下載 payload。
+            if item.source.isFileURL {
+                torrentID = try bridge.startTorrentFile(item.source.path, savePath: folder.path)
+            } else {
+                torrentID = try bridge.startMagnet(item.source.absoluteString, savePath: folder.path)
+            }
         } catch {
             if hasSecurityScope {
                 folder.stopAccessingSecurityScopedResource()

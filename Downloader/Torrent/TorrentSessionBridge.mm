@@ -131,6 +131,53 @@ namespace lt = libtorrent;
     return [NSString stringWithUTF8String:identifier.c_str()];
 }
 
+- (NSString *)startTorrentFile:(NSString *)torrentFilePath savePath:(NSString *)savePath error:(NSError **)error {
+    if (torrentFilePath.length == 0 || savePath.length == 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"Downloader.Torrent"
+                                         code:4
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Missing torrent file path or save path."}];
+        }
+        return nil;
+    }
+
+    lt::error_code ec;
+    auto info = std::make_shared<lt::torrent_info>(torrentFilePath.UTF8String, ec);
+    if (ec) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"Downloader.Torrent"
+                                         code:5
+                                     userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithUTF8String:ec.message().c_str()]}];
+        }
+        return nil;
+    }
+
+    lt::add_torrent_params params;
+    params.ti = info;
+    params.save_path = savePath.UTF8String;
+    params.flags &= ~lt::torrent_flags::paused;
+    params.flags &= ~lt::torrent_flags::auto_managed;
+    // Match magnet behaviour: wait for the user to choose files before payload download.
+    params.flags |= lt::torrent_flags::upload_mode;
+
+    lt::torrent_handle handle = _session->add_torrent(std::move(params), ec);
+    if (ec) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"Downloader.Torrent"
+                                         code:6
+                                     userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithUTF8String:ec.message().c_str()]}];
+        }
+        return nil;
+    }
+
+    std::string identifier = std::string("file://") + torrentFilePath.UTF8String;
+    _handles[identifier] = handle;
+    handle.force_reannounce(0, -1, lt::torrent_handle::ignore_min_interval);
+    handle.force_dht_announce();
+    handle.force_lsd_announce();
+    return [NSString stringWithUTF8String:identifier.c_str()];
+}
+
 - (void)pause:(NSString *)identifier {
     auto found = _handles.find(identifier.UTF8String);
     if (found != _handles.end() && found->second.is_valid()) {

@@ -35,7 +35,7 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 新增一個下載任務，並立即開始下載。
     func add(url: URL, destination: URL?) {
         // 用 URL 形式判斷下載類型：magnet 和 .torrent 交給 BT engine，其他交給 HTTP。
-        let kind: DownloadKind = url.absoluteString.hasPrefix("magnet:") || url.pathExtension == "torrent" ? .torrent : .http
+        let kind: DownloadKind = url.absoluteString.hasPrefix("magnet:") || url.pathExtension.lowercased() == "torrent" ? .torrent : .http
         let item = DownloadItem(
             name: Self.displayName(for: url),
             source: url,
