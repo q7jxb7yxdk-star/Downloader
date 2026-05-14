@@ -58,6 +58,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var name: String
     var source: URL
     var destination: URL?
+    var localFileURL: URL?
     var kind: DownloadKind
     var status: DownloadStatus = .queued
     var progress: Double = 0
@@ -76,6 +77,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         case name
         case source
         case destination
+        case localFileURL
         case kind
         case status
         case progress
@@ -95,6 +97,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         name: String,
         source: URL,
         destination: URL?,
+        localFileURL: URL? = nil,
         kind: DownloadKind,
         status: DownloadStatus = .queued,
         progress: Double = 0,
@@ -111,6 +114,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         self.name = name
         self.source = source
         self.destination = destination
+        self.localFileURL = localFileURL
         self.kind = kind
         self.status = status
         self.progress = progress
@@ -133,6 +137,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         name = try container.decode(String.self, forKey: .name)
         source = try container.decode(URL.self, forKey: .source)
         destination = try container.decodeIfPresent(URL.self, forKey: .destination)
+        localFileURL = try container.decodeIfPresent(URL.self, forKey: .localFileURL)
         kind = try container.decode(DownloadKind.self, forKey: .kind)
         status = try container.decodeIfPresent(DownloadStatus.self, forKey: .status) ?? .queued
         progress = try container.decodeIfPresent(Double.self, forKey: .progress) ?? 0

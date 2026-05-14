@@ -37,6 +37,18 @@ struct DownloadsListView: View {
                             .lineLimit(1)
                     }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    downloadManager.showInFinder(item)
+                }
+                .contextMenu {
+                    Button {
+                        downloadManager.showInFinder(item)
+                    } label: {
+                        Label("Show in Finder", systemImage: "folder")
+                    }
+                    .disabled(item.destination == nil && item.localFileURL == nil)
+                }
             }
 
             TableColumn("Progress") { item in

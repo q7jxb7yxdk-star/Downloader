@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// App 的中央狀態管理器。
@@ -203,9 +204,18 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].status = .completed
         items[index].bytesPerSecond = 0
         items[index].averageBytesPerSecond = completedBytes > 0 ? Int64(Double(completedBytes) / elapsed) : 0
+        items[index].localFileURL = fileURL
         items[index].errorMessage = nil
         NotificationManager.shared.downloadDidFinish(name: items[index].name)
         store.save(items)
+    }
+
+    /// 在 Finder 顯示下載項目。
+    ///
+    /// 完成的任務優先選中實際檔案；如果檔案不存在，就打開下載資料夾。
+    func showInFinder(_ item: DownloadItem) {
+        guard let url = finderURL(for: item) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     /// Engine 回報失敗。
@@ -247,6 +257,33 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 依照目前 Table selection 取出完整項目，並保持列表原本排序。
     private var selectedItems: [DownloadItem] {
         items.filter { selectedItemIDs.contains($0.id) }
+    }
+
+    /// 找出 Finder 應該顯示的位置。
+    private func finderURL(for item: DownloadItem) -> URL? {
+        let fileManager = FileManager.default
+
+        if let localFileURL = item.localFileURL {
+            if fileManager.fileExists(atPath: localFileURL.path) {
+                return localFileURL
+            }
+            let containingFolder = localFileURL.deletingLastPathComponent()
+            if fileManager.fileExists(atPath: containingFolder.path) {
+                return containingFolder
+            }
+        }
+
+        if let destination = item.destination {
+            let guessedFileURL = destination.appending(path: item.name)
+            if fileManager.fileExists(atPath: guessedFileURL.path) {
+                return guessedFileURL
+            }
+            if fileManager.fileExists(atPath: destination.path) {
+                return destination
+            }
+        }
+
+        return nil
     }
 
     /// 從 URL 產生列表上顯示的檔名。
