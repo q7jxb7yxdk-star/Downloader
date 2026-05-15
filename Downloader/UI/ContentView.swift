@@ -48,6 +48,7 @@ struct ContentView: View {
                                 Label("Resume", systemImage: "play.fill")
                             }
                             .help("Resume")
+                            .disabled(!downloadManager.canResumeSelected)
 
                             Button {
                                 downloadManager.pauseSelected()

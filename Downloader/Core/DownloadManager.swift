@@ -19,6 +19,15 @@ final class DownloadManager: NSObject, ObservableObject {
     /// BT 找到 metadata 後用來彈出「選擇檔案」sheet。
     @Published var torrentFileSelection: TorrentFileSelection?
 
+    /// 目前選取項目中是否有可以繼續下載的任務。
+    ///
+    /// 已完成、正在下載、Trash 內的任務都不應該由 Resume 重新開始。
+    var canResumeSelected: Bool {
+        selectedItems.contains { item in
+            !item.isTrashed && item.status != .downloading && item.status != .completed
+        }
+    }
+
     /// 負責把列表保存到 Application Support。
     private let store = DownloadStore()
 
@@ -79,7 +88,7 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// 繼續目前選中的任務。
     func resumeSelected() {
-        for item in selectedItems where !item.isTrashed {
+        for item in selectedItems where !item.isTrashed && item.status != .completed && item.status != .downloading {
             mark(id: item.id, status: .queued)
 
             switch item.kind {

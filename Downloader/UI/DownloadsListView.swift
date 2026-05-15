@@ -64,7 +64,7 @@ struct DownloadsListView: View {
                     .lineLimit(1)
                     .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
             }
-            .width(min: 120, ideal: 220)
+            .width(min: 360, ideal: 420)
 
             TableColumn("Speed") { item in
                 // monospacedDigit 讓速度數字跳動時欄位比較穩定。
@@ -72,7 +72,7 @@ struct DownloadsListView: View {
                     .monospacedDigit()
                     .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
             }
-            .width(90)
+            .width(min: 130, ideal: 150)
         }
         .focusable()
         .focused($tableIsFocused)
