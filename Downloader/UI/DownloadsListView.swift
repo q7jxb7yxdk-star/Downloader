@@ -5,6 +5,7 @@ import SwiftUI
 /// 使用 macOS 原生 `Table`，所以可以有多欄、選取列、欄寬等桌面 App 常見行為。
 struct DownloadsListView: View {
     @EnvironmentObject private var downloadManager: DownloadManager
+    @FocusState private var tableIsFocused: Bool
     let filter: DownloadFilter
 
     /// 根據 sidebar 選項篩選任務。
@@ -37,7 +38,7 @@ struct DownloadsListView: View {
                             .lineLimit(1)
                     }
                 }
-                .rowInteraction(for: item, downloadManager: downloadManager)
+                .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
             }
             .width(min: 260, ideal: 420)
 
@@ -53,7 +54,7 @@ struct DownloadsListView: View {
                         .monospacedDigit()
                         .frame(width: 44, alignment: .trailing)
                 }
-                    .rowInteraction(for: item, downloadManager: downloadManager)
+                    .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
             }
             .width(min: 160, ideal: 210)
 
@@ -61,7 +62,7 @@ struct DownloadsListView: View {
                 Text(item.statusText)
                     .foregroundStyle(item.status.color)
                     .lineLimit(1)
-                    .rowInteraction(for: item, downloadManager: downloadManager)
+                    .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
             }
             .width(min: 120, ideal: 220)
 
@@ -69,10 +70,12 @@ struct DownloadsListView: View {
                 // monospacedDigit 讓速度數字跳動時欄位比較穩定。
                 Text(item.speedText)
                     .monospacedDigit()
-                    .rowInteraction(for: item, downloadManager: downloadManager)
+                    .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
             }
             .width(90)
         }
+        .focusable()
+        .focused($tableIsFocused)
         .overlay {
             if items.isEmpty {
                 // macOS 內建空狀態元件，比手寫 placeholder 更像系統 App。
@@ -101,6 +104,11 @@ struct DownloadsListView: View {
         let visibleIDs = Set(items.map(\.id))
         downloadManager.selectedItemIDs.formIntersection(visibleIDs)
     }
+
+    /// 讓列表重新取得鍵盤焦點，selection 才會用藍色顯示。
+    private func focusTable() {
+        tableIsFocused = true
+    }
 }
 
 private extension DownloadItem {
@@ -116,16 +124,22 @@ private extension View {
     ///
     /// SwiftUI `Table` 目前沒有直接掛在整條 row 的 context menu API，
     /// 所以把相同行為套到每個 cell，使用時就像整條 row 都可以右鍵。
-    func rowInteraction(for item: DownloadItem, downloadManager: DownloadManager) -> some View {
+    func rowInteraction(
+        for item: DownloadItem,
+        downloadManager: DownloadManager,
+        focusTable: @escaping () -> Void
+    ) -> some View {
         self
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .simultaneousGesture(
                 TapGesture(count: 1).onEnded {
+                    focusTable()
                     downloadManager.selectForSingleClick(item)
                 }
             )
             .onTapGesture(count: 2) {
+                focusTable()
                 downloadManager.showInFinder(item)
             }
             .contextMenu {
