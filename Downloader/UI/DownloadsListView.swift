@@ -83,7 +83,23 @@ struct DownloadsListView: View {
                 )
             }
         }
+        .onAppear(perform: keepSelectionVisible)
+        .onChange(of: filter) { _, _ in
+            keepSelectionVisible()
+        }
+        .onChange(of: items.map(\.id)) { _, _ in
+            keepSelectionVisible()
+        }
         .navigationTitle(filter.rawValue)
+    }
+
+    /// 切換 All / Trash 等分頁後，清走目前分頁看不到的選取項目。
+    ///
+    /// 如果保留了其他分頁的 selection，macOS `Table` 容易看似「灰色選取」，
+    /// toolbar 也可能對著畫面上看不到的任務操作。
+    private func keepSelectionVisible() {
+        let visibleIDs = Set(items.map(\.id))
+        downloadManager.selectedItemIDs.formIntersection(visibleIDs)
     }
 }
 
@@ -106,9 +122,7 @@ private extension View {
             .contentShape(Rectangle())
             .simultaneousGesture(
                 TapGesture(count: 1).onEnded {
-                    if !downloadManager.selectedItemIDs.contains(item.id) {
-                        downloadManager.selectedItemIDs = [item.id]
-                    }
+                    downloadManager.selectForSingleClick(item)
                 }
             )
             .onTapGesture(count: 2) {

@@ -55,6 +55,15 @@ final class DownloadManager: NSObject, ObservableObject {
         }
     }
 
+    /// Table cell 被單擊時選中該任務。
+    ///
+    /// 這個方法集中處理 selection，避免 UI 每個 cell 直接改狀態時，
+    /// 和 Trash / All 分頁切換後的過期 selection 打架。
+    func selectForSingleClick(_ item: DownloadItem) {
+        guard items.contains(where: { $0.id == item.id }) else { return }
+        selectedItemIDs = [item.id]
+    }
+
     /// 暫停目前選中的任務。
     func pauseSelected() {
         for item in selectedItems where !item.isTrashed {
