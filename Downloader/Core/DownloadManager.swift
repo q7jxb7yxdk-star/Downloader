@@ -30,6 +30,7 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// 負責把列表保存到 Application Support。
     private let store = DownloadStore()
+    private var scheduledSaveTask: Task<Void, Never>?
 
     /// `lazy` 可以避免在 `self` 尚未初始化完成前就把 delegate 指向 self。
     private lazy var httpEngine = HTTPDownloadEngine(delegate: self)
@@ -220,7 +221,7 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].bytesExpected = expected
         items[index].bytesPerSecond = speed
         items[index].status = .downloading
-        store.save(items)
+        scheduleSave()
     }
 
     /// Engine 回報補充狀態文字，例如「Checking range support」或 peer 數量。
@@ -230,7 +231,7 @@ final class DownloadManager: NSObject, ObservableObject {
         guard items[index].status != .paused else { return }
         items[index].status = .downloading
         items[index].errorMessage = message
-        store.save(items)
+        scheduleSave()
     }
 
     /// Engine 回報下載完成。
@@ -280,6 +281,21 @@ final class DownloadManager: NSObject, ObservableObject {
         }
         items[index].errorMessage = errorMessage
         store.save(items)
+    }
+
+    /// 合併高頻進度更新的保存工作。
+    ///
+    /// 下載中速度和進度可能一秒更新多次；UI 可以即時重畫，
+    /// 但 JSON 不需要每次都寫入磁碟。這裡把短時間內的更新合併，
+    /// 減少磁碟 I/O 和主執行緒壓力。
+    private func scheduleSave() {
+        scheduledSaveTask?.cancel()
+        scheduledSaveTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(750))
+            guard !Task.isCancelled else { return }
+            store.save(items)
+            scheduledSaveTask = nil
+        }
     }
 
     /// 從 Trash 復原目前選中的項目。
