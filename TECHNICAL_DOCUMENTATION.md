@@ -142,7 +142,48 @@ filename.part-3.tmp
 
 全部完成後，`mergeSegmentedDownload` 會依 index 順序合併成正式檔案，然後刪除分段 `.tmp`。
 
-### 4. 速度計算
+### 4. HTTP threads / connections 設定位置
+
+HTTP 分段下載的連線數在這個檔案設定：
+
+```text
+Downloader/HTTP/HTTPDownloadEngine.swift
+```
+
+搜尋關鍵字：
+
+```swift
+segmentedThreadCount
+```
+
+目前會看到類似：
+
+```swift
+private static let segmentedThreadCount = 4
+```
+
+這個 `4` 就是一般 HTTP 分段下載最多使用的 threads / connections 數量。
+
+如果改成：
+
+```swift
+private static let segmentedThreadCount = 8
+```
+
+代表支援 Range 的大檔案最多會切成 8 段下載。
+
+不過，不是越多 threads 越快。一般建議：
+
+| Connections | 建議 |
+| ---: | --- |
+| 1 | 最穩定，但不能加速 |
+| 4 | 建議預設值，速度和穩定性較平衡 |
+| 8 | 大檔案可能更快，但較容易波動 |
+| 16 或以上 | 通常不建議，可能被 server 限速或連線失敗 |
+
+是否真的可以多線下載，仍然取決於 server 是否支援 HTTP `Range`。如果 server 不支援 Range，即使 `segmentedThreadCount` 設成 8，Downloader 也只能用 1 條 connection 下載。
+
+### 5. 速度計算
 
 下載速度不是每次 callback 都直接顯示，因為會跳得很亂。App 每 0.5 秒取樣一次，並用簡單加權平均平滑：
 
