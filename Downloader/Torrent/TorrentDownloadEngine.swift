@@ -35,6 +35,9 @@ final class TorrentDownloadEngine {
     /// 等待使用者選檔案時，不應該把 torrent 判斷為完成或繼續更新速度。
     private var waitingForFileSelectionItemIDs: Set<DownloadItem.ID> = []
 
+    /// App 重開後 resume 時，從持久化資料帶回之前選過的檔案 index。
+    private var selectedFileIndexesByItemID: [DownloadItem.ID: Set<Int>] = [:]
+
     /// 找 metadata 時定期 reannounce，提升找到 peer/metadata 的機會。
     private var metadataPollCountsByTorrentID: [String: Int] = [:]
     private var timer: Timer?
@@ -66,6 +69,9 @@ final class TorrentDownloadEngine {
 
         itemIDsByTorrentID[torrentID] = item.id
         saveFoldersByTorrentID[torrentID] = folder
+        if !item.selectedTorrentFileIndexes.isEmpty {
+            selectedFileIndexesByItemID[item.id] = item.selectedTorrentFileIndexes
+        }
         if hasSecurityScope {
             securityScopedFoldersByTorrentID[torrentID] = folder
         }
@@ -88,6 +94,7 @@ final class TorrentDownloadEngine {
         pausedItemIDs.remove(id)
         selectionRequestedItemIDs.remove(id)
         waitingForFileSelectionItemIDs.remove(id)
+        selectedFileIndexesByItemID[id] = nil
         metadataPollCountsByTorrentID[torrentID] = nil
         securityScopedFoldersByTorrentID.removeValue(forKey: torrentID)?.stopAccessingSecurityScopedResource()
     }
@@ -97,6 +104,9 @@ final class TorrentDownloadEngine {
         guard let torrentID = torrentID(for: item.id) else {
             start(item: item)
             return
+        }
+        if !item.selectedTorrentFileIndexes.isEmpty {
+            selectedFileIndexesByItemID[item.id] = item.selectedTorrentFileIndexes
         }
         pausedItemIDs.remove(item.id)
         bridge.resume(torrentID)
@@ -111,6 +121,8 @@ final class TorrentDownloadEngine {
             indexSet.add(index)
         }
         bridge.setSelectedFileIndexes(indexSet as IndexSet, forIdentifier: torrentID)
+        selectedFileIndexesByItemID[itemID] = indexes
+        selectionRequestedItemIDs.insert(itemID)
         pausedItemIDs.remove(itemID)
         waitingForFileSelectionItemIDs.remove(itemID)
         startTimerIfNeeded()
@@ -178,6 +190,18 @@ final class TorrentDownloadEngine {
                 }
 
                 if !files.isEmpty {
+                    if let savedIndexes = selectedFileIndexesByItemID[itemID], !savedIndexes.isEmpty {
+                        let indexSet = NSMutableIndexSet()
+                        for index in savedIndexes {
+                            indexSet.add(index)
+                        }
+                        selectionRequestedItemIDs.insert(itemID)
+                        waitingForFileSelectionItemIDs.remove(itemID)
+                        bridge.setSelectedFileIndexes(indexSet as IndexSet, forIdentifier: torrentID)
+                        bridge.reannounce(torrentID)
+                        continue
+                    }
+
                     selectionRequestedItemIDs.insert(itemID)
                     waitingForFileSelectionItemIDs.insert(itemID)
                     // 等使用者選檔案前，把所有檔案 priority 設成 dont_download。
@@ -221,6 +245,7 @@ final class TorrentDownloadEngine {
                 pausedItemIDs.remove(completedItemID)
                 selectionRequestedItemIDs.remove(completedItemID)
                 waitingForFileSelectionItemIDs.remove(completedItemID)
+                selectedFileIndexesByItemID[completedItemID] = nil
             }
             securityScopedFoldersByTorrentID.removeValue(forKey: torrentID)?.stopAccessingSecurityScopedResource()
         }

@@ -152,16 +152,29 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// 使用者在 BT 檔案選擇 sheet 按下開始後呼叫。
     func chooseTorrentFiles(itemID: DownloadItem.ID, indexes: Set<Int>) {
-        guard let item = items.first(where: { $0.id == itemID }), item.kind == .torrent else { return }
+        guard let index = items.firstIndex(where: { $0.id == itemID }), items[index].kind == .torrent else { return }
+        items[index].selectedTorrentFileIndexes = indexes
         torrentFileSelection = nil
         torrentEngine.selectFiles(for: itemID, indexes: indexes)
         mark(id: itemID, status: .queued)
     }
 
-    /// 使用者取消 BT 檔案選擇時，直接取消整個 torrent 任務。
+    /// 使用者取消 BT 檔案選擇時，只有全新任務會被移除。
+    ///
+    /// 如果任務之前已經下載過，重開 App 後意外再出現選檔 sheet 時，
+    /// Cancel 只會停止這次 engine，保留列表項目和既有進度。
     func cancelTorrentFileSelection(itemID: DownloadItem.ID) {
         guard let index = items.firstIndex(where: { $0.id == itemID }) else { return }
         torrentEngine.cancel(id: itemID)
+        if items[index].progress > 0 || items[index].bytesReceived > 0 || !items[index].selectedTorrentFileIndexes.isEmpty {
+            torrentFileSelection = nil
+            items[index].status = .paused
+            items[index].bytesPerSecond = 0
+            items[index].errorMessage = nil
+            store.save(items)
+            return
+        }
+
         items.remove(at: index)
         selectedItemIDs = Set(items.prefix(1).map(\.id))
         torrentFileSelection = nil

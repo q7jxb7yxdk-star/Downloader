@@ -66,6 +66,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var bytesExpected: Int64 = 0
     var bytesPerSecond: Int64 = 0
     var averageBytesPerSecond: Int64 = 0
+    var selectedTorrentFileIndexes: Set<Int> = []
     var isTrashed = false
     var statusBeforeTrash: DownloadStatus?
     var errorMessage: String?
@@ -85,6 +86,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         case bytesExpected
         case bytesPerSecond
         case averageBytesPerSecond
+        case selectedTorrentFileIndexes
         case isTrashed
         case statusBeforeTrash
         case errorMessage
@@ -105,6 +107,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         bytesExpected: Int64 = 0,
         bytesPerSecond: Int64 = 0,
         averageBytesPerSecond: Int64 = 0,
+        selectedTorrentFileIndexes: Set<Int> = [],
         isTrashed: Bool = false,
         statusBeforeTrash: DownloadStatus? = nil,
         errorMessage: String? = nil,
@@ -122,6 +125,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         self.bytesExpected = bytesExpected
         self.bytesPerSecond = bytesPerSecond
         self.averageBytesPerSecond = averageBytesPerSecond
+        self.selectedTorrentFileIndexes = selectedTorrentFileIndexes
         self.isTrashed = isTrashed
         self.statusBeforeTrash = statusBeforeTrash
         self.errorMessage = errorMessage
@@ -145,6 +149,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         bytesExpected = try container.decodeIfPresent(Int64.self, forKey: .bytesExpected) ?? 0
         bytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .bytesPerSecond) ?? 0
         averageBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .averageBytesPerSecond) ?? 0
+        selectedTorrentFileIndexes = try container.decodeIfPresent(Set<Int>.self, forKey: .selectedTorrentFileIndexes) ?? []
         isTrashed = try container.decodeIfPresent(Bool.self, forKey: .isTrashed) ?? false
         statusBeforeTrash = try container.decodeIfPresent(DownloadStatus.self, forKey: .statusBeforeTrash)
         errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
