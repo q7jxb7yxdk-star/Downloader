@@ -869,13 +869,3 @@ rm -rf ~/Library/Developer/Xcode/DerivedData/Downloader-fkmjpusihrlgzaeuymdzbrsr
 ```
 
 刪除後重新 Run / Build，Safari Extension 列表會較容易只留下目前 project 產生的版本。
-
-## 之後可以改進的方向
-
-- 實作真正的全域同時下載數限制。
-- 實作全域速度限制。
-- 支援 `.torrent` 檔案匯入，不只 magnet。
-- 加入 Safari extension 或更完整的 URL scheme integration。
-- 保存 BT resume data，讓 App 重開後可更完整地續傳。
-- 加入下載完成後 reveal in Finder。
-- 加入錯誤重試策略和更詳細的錯誤分類。
