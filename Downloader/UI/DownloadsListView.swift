@@ -195,6 +195,10 @@ private extension View {
             .simultaneousGesture(
                 TapGesture(count: 1).onEnded {
                     focusTable()
+                    guard !NSEvent.modifierFlags.contains(.command),
+                          !NSEvent.modifierFlags.contains(.shift) else {
+                        return
+                    }
                     downloadManager.selectForSingleClick(item)
                 }
             )
