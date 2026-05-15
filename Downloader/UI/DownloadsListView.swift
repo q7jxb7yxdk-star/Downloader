@@ -42,12 +42,20 @@ struct DownloadsListView: View {
             .width(min: 260, ideal: 420)
 
             TableColumn("Progress") { item in
-                // ProgressView 直接吃 0...1 的 Double。
-                ProgressView(value: item.progress)
-                    .frame(minWidth: 120)
+                // ProgressView 顯示條狀進度，右邊用文字顯示百分比。
+                HStack(spacing: 8) {
+                    ProgressView(value: item.progress)
+                        .frame(minWidth: 90)
+
+                    Text(item.percentText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 44, alignment: .trailing)
+                }
                     .rowInteraction(for: item, downloadManager: downloadManager)
             }
-            .width(min: 130, ideal: 170)
+            .width(min: 160, ideal: 210)
 
             TableColumn("Status") { item in
                 Text(item.statusText)
@@ -76,6 +84,14 @@ struct DownloadsListView: View {
             }
         }
         .navigationTitle(filter.rawValue)
+    }
+}
+
+private extension DownloadItem {
+    /// 將 0...1 的 progress 轉成列表用百分比文字。
+    var percentText: String {
+        let percentage = min(max(progress, 0), 1) * 100
+        return "\(Int(percentage.rounded()))%"
     }
 }
 
