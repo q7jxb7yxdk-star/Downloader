@@ -280,6 +280,427 @@ FolderBookmarkStore.withAccess(to: folder) {
 - 支援全選、取消全選。
 - 用 checkbox 決定要下載哪些檔案。
 
+## 常見 UI 代碼位置導覽
+
+這一段是給初學者用的「地圖」。如果你想改某個按鈕、欄位或畫面，先看這裡，再去對應檔案搜尋關鍵字。
+
+### 主視窗入口
+
+位置：`Downloader/App/DownloaderApp.swift`
+
+這個檔案負責建立 App 主視窗：
+
+```swift
+Window("Downloader", id: "main") {
+    ContentView()
+        .environmentObject(downloadManager)
+        .frame(minWidth: 980, minHeight: 620)
+}
+```
+
+重點：
+
+- `Window("Downloader", id: "main")`：建立 macOS 視窗，標題是 `Downloader`。
+- `ContentView()`：主畫面從這裡開始。
+- `.environmentObject(downloadManager)`：把同一個 `DownloadManager` 傳給所有子畫面使用。
+- `.frame(minWidth:minHeight:)`：設定 App 視窗最小大小。
+
+如果想改 App 最小視窗大小，就改 `.frame(minWidth: 980, minHeight: 620)`。
+
+### 上方工具列按鈕
+
+位置：`Downloader/UI/ContentView.swift`
+
+搜尋關鍵字：`toolbar`
+
+工具列按鈕在這段：
+
+```swift
+.toolbar {
+    ToolbarItemGroup {
+        Button {
+            showingAddDownload = true
+        } label: {
+            Label("Add Download", systemImage: "plus")
+        }
+        .help("Add Download")
+    }
+}
+```
+
+一個 SwiftUI button 通常分兩部分：
+
+```swift
+Button {
+    // 按下去後做甚麼
+} label: {
+    // 按鈕外觀顯示甚麼
+}
+```
+
+例子：
+
+- `showingAddDownload = true`：打開新增下載視窗。
+- `downloadManager.resumeSelected()`：繼續目前選中的下載。
+- `downloadManager.pauseSelected()`：暫停目前選中的下載。
+- `downloadManager.deleteSelected()`：刪除目前選中的下載。
+- `.help("Resume")`：滑鼠停在按鈕上時顯示 tooltip。
+- `.disabled(...)`：條件成立時按鈕變灰，不能按。
+
+### 左側分類 Sidebar
+
+位置：`Downloader/UI/SidebarView.swift`
+
+搜尋關鍵字：`DownloadFilter`
+
+左邊 `All`、`Active`、`Paused`、`Completed`、`Trash` 是由 enum 定義：
+
+```swift
+enum DownloadFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case active = "Active"
+    case paused = "Paused"
+    case completed = "Completed"
+    case trash = "Trash"
+}
+```
+
+如果想改左側分類名稱，例如把 `Trash` 改成其他文字，就改 `case trash = "Trash"`。
+
+每個分類的圖示在 `systemImage`：
+
+```swift
+case .trash: "trash"
+```
+
+這裡使用的是 Apple SF Symbols 名稱。
+
+### Table 和 Column
+
+位置：`Downloader/UI/DownloadsListView.swift`
+
+搜尋關鍵字：`TableColumn`
+
+下載列表是這段：
+
+```swift
+Table(items, selection: $downloadManager.selectedItemIDs) {
+    TableColumn("Name") { item in
+        ...
+    }
+
+    TableColumn("Progress") { item in
+        ...
+    }
+
+    TableColumn("Status") { item in
+        ...
+    }
+
+    TableColumn("Speed") { item in
+        ...
+    }
+}
+```
+
+重點：
+
+- `Table(...)`：macOS 表格。
+- `items`：目前要顯示的下載項目。
+- `selection`：目前選中的項目。
+- `TableColumn("Name")`：建立一個欄位，欄位標題是 `Name`。
+- `{ item in ... }`：每一行都會拿到一個 `DownloadItem`，然後決定這一格顯示甚麼。
+
+目前有四個欄：
+
+| 欄位 | 代碼位置 | 顯示內容 |
+| --- | --- | --- |
+| Name | `TableColumn("Name")` | 檔名、來源 URL、HTTP/BT 圖示 |
+| Progress | `TableColumn("Progress")` | 進度條和百分比 |
+| Status | `TableColumn("Status")` | 下載狀態、錯誤、BT seeds/peers |
+| Speed | `TableColumn("Speed")` | 即時速度或平均速度 |
+
+### Table 欄位闊度
+
+位置：`Downloader/UI/DownloadsListView.swift`
+
+搜尋關鍵字：`.width`
+
+每個欄位後面都有 `.width(...)`：
+
+```swift
+.width(min: 260, ideal: 420)
+```
+
+意思：
+
+- `min`：最小闊度，視窗很窄時盡量不要低過這個值。
+- `ideal`：理想闊度，空間足夠時 SwiftUI 會偏向這個闊度。
+
+例子：
+
+```swift
+TableColumn("Status") { item in
+    Text(item.statusText)
+}
+.width(min: 350, ideal: 410)
+```
+
+如果想讓 `Status` 欄更闊，就增加 `min` 或 `ideal`。
+
+### 水平捲動條
+
+位置：`Downloader/UI/DownloadsListView.swift`
+
+搜尋關鍵字：`ScrollView(.horizontal)`
+
+Table 外面包了水平 `ScrollView`：
+
+```swift
+ScrollView(.horizontal) {
+    Table(...)
+        .frame(width: max(geometry.size.width, minimumTableWidth))
+}
+```
+
+意思：
+
+- `ScrollView(.horizontal)`：內容太闊時，可以左右捲動。
+- `minimumTableWidth`：Table 最小總闊度。
+- `max(geometry.size.width, minimumTableWidth)`：Table 闊度取「目前畫面闊度」和「最小總闊度」中較大的那個。
+
+這樣做的目的：
+
+- 視窗夠闊時：Table 剛好填滿，不留右側空白。
+- 視窗太窄時：Table 保持最小闊度，底部出現水平 scrollbar。
+
+### 進度條和百分比
+
+位置：`Downloader/UI/DownloadsListView.swift`
+
+搜尋關鍵字：`ProgressView`
+
+進度條在 `Progress` column 裡：
+
+```swift
+ProgressView(value: item.progress)
+```
+
+百分比文字在旁邊：
+
+```swift
+Text(item.percentText)
+```
+
+`item.progress` 是 `0...1`：
+
+```text
+0.0 = 0%
+0.5 = 50%
+1.0 = 100%
+```
+
+百分比轉換在同一個檔案底部：
+
+```swift
+private extension DownloadItem {
+    var percentText: String {
+        let percentage = min(max(progress, 0), 1) * 100
+        return "\(Int(percentage.rounded()))%"
+    }
+}
+```
+
+### 右鍵選單
+
+位置：`Downloader/UI/DownloadsListView.swift`
+
+搜尋關鍵字：`contextMenu`
+
+右鍵選單在 `rowInteraction(...)` 裡：
+
+```swift
+.contextMenu {
+    Button {
+        downloadManager.resumeSelected()
+    } label: {
+        Label("Resume", systemImage: "play.fill")
+    }
+
+    Button {
+        downloadManager.pauseSelected()
+    } label: {
+        Label("Pause", systemImage: "pause.fill")
+    }
+
+    Button(role: .destructive) {
+        downloadManager.deleteSelected()
+    } label: {
+        Label("Delete", systemImage: "trash")
+    }
+}
+```
+
+重點：
+
+- `.contextMenu`：右鍵時彈出的選單。
+- `Button(role: .destructive)`：危險操作，例如刪除，系統會用比較警告的樣式。
+- `Label("Resume", systemImage: "play.fill")`：文字加圖示。
+
+### 單擊、雙擊和焦點
+
+位置：`Downloader/UI/DownloadsListView.swift`
+
+搜尋關鍵字：`rowInteraction`
+
+每一個 cell 都套用：
+
+```swift
+.rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+```
+
+這個 helper 集中處理：
+
+- 單擊：選中該下載項目。
+- 雙擊：用 Finder 顯示下載位置。
+- 右鍵：顯示 context menu。
+- 焦點：讓 Table selection 變成藍色，而不是灰色。
+
+相關代碼：
+
+```swift
+.simultaneousGesture(
+    TapGesture(count: 1).onEnded {
+        focusTable()
+        downloadManager.selectForSingleClick(item)
+    }
+)
+.onTapGesture(count: 2) {
+    focusTable()
+    downloadManager.showInFinder(item)
+}
+```
+
+### 新增下載視窗
+
+位置：`Downloader/UI/AddDownloadSheet.swift`
+
+搜尋關鍵字：`AddDownloadSheet`
+
+這個檔案負責「新增下載」彈出視窗。
+
+常見代碼：
+
+```swift
+TextField("URL or magnet link", text: $urlText)
+```
+
+這是輸入 URL / magnet 的文字框。
+
+```swift
+Button("Choose Folder") {
+    chooseFolder()
+}
+```
+
+這是選擇下載資料夾的按鈕。
+
+```swift
+Button("Add") {
+    addDownload()
+}
+```
+
+這是建立下載任務的按鈕。
+
+最後會呼叫：
+
+```swift
+downloadManager.add(url: url, destination: destination)
+```
+
+意思是：把 URL 和下載資料夾交給 `DownloadManager`，由它決定用 HTTP 還是 BT engine。
+
+### BT 選擇檔案視窗
+
+位置：`Downloader/UI/TorrentFileSelectionSheet.swift`
+
+搜尋關鍵字：`TorrentFileSelectionSheet`
+
+這個檔案負責 BT 找到 metadata 後，讓使用者選 torrent 內要下載的檔案。
+
+常見按鈕：
+
+```swift
+Button("Select All") {
+    selectedIndexes = Set(selection.files.map(\.index))
+}
+```
+
+全選所有檔案。
+
+```swift
+Button("Deselect All") {
+    selectedIndexes.removeAll()
+}
+```
+
+取消全選。
+
+```swift
+Button("Start Selected Files") {
+    downloadManager.chooseTorrentFiles(itemID: selection.itemID, indexes: selectedIndexes)
+}
+```
+
+開始下載選中的 BT 檔案。
+
+### Settings 視窗
+
+位置：`Downloader/UI/SettingsView.swift`
+
+搜尋關鍵字：`SettingsView`
+
+這裡放 App 設定，例如速度限制：
+
+```swift
+Stepper("Speed limit: ...", value: $speedLimitKBps, in: 0...100_000, step: 100)
+```
+
+`Stepper` 是可以按加減的數值控制。
+
+### App menu 快捷鍵
+
+位置：`Downloader/App/DownloaderApp.swift`
+
+搜尋關鍵字：`commands`
+
+menu command 例如：
+
+```swift
+Button("Add Download...") {
+    NotificationCenter.default.post(name: .showAddDownload, object: nil)
+}
+.keyboardShortcut("n", modifiers: [.command])
+```
+
+意思：
+
+- menu 裡有 `Add Download...`
+- 快捷鍵是 `Command + N`
+- 按下後發出 `.showAddDownload` 通知，叫 `ContentView` 打開新增下載視窗。
+
+刪除快捷鍵：
+
+```swift
+Button("Delete Download") {
+    downloadManager.deleteSelected()
+}
+.keyboardShortcut(.delete, modifiers: [])
+```
+
+意思是按鍵盤 `Delete` 就刪除目前選中的下載項目。
+
 ## 持久化
 
 `DownloadStore.swift`

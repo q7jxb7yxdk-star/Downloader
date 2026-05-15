@@ -22,60 +22,65 @@ struct DownloadsListView: View {
     }
 
     var body: some View {
-        // Table 的 selection 綁定到 DownloadManager，toolbar 才知道目前操作哪些項目。
-        // 綁定 Set<ID> 後，macOS 可用 Command-click / Shift-click 多選。
-        Table(items, selection: $downloadManager.selectedItemIDs) {
-            TableColumn("Name") { item in
-                HStack(spacing: 10) {
-                    Image(systemName: item.kind.icon)
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.name)
-                            .lineLimit(1)
-                        Text(item.source.absoluteString)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+        GeometryReader { geometry in
+            ScrollView(.horizontal) {
+                // Table 的 selection 綁定到 DownloadManager，toolbar 才知道目前操作哪些項目。
+                // 綁定 Set<ID> 後，macOS 可用 Command-click / Shift-click 多選。
+                Table(items, selection: $downloadManager.selectedItemIDs) {
+                    TableColumn("Name") { item in
+                        HStack(spacing: 10) {
+                            Image(systemName: item.kind.icon)
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.name)
+                                    .lineLimit(1)
+                                Text(item.source.absoluteString)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
                     }
+                    .width(min: 260, ideal: 420)
+
+                    TableColumn("Progress") { item in
+                        // ProgressView 顯示條狀進度，右邊用文字顯示百分比。
+                        HStack(spacing: 8) {
+                            ProgressView(value: item.progress)
+                                .frame(minWidth: 90)
+
+                            Text(item.percentText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 44, alignment: .trailing)
+                        }
+                            .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+                    }
+                    .width(min: 160, ideal: 210)
+
+                    TableColumn("Status") { item in
+                        Text(item.statusText)
+                            .foregroundStyle(item.status.color)
+                            .lineLimit(1)
+                            .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+                    }
+                    .width(min: 350, ideal: 410)
+
+                    TableColumn("Speed") { item in
+                        // monospacedDigit 讓速度數字跳動時欄位比較穩定。
+                        Text(item.speedText)
+                            .monospacedDigit()
+                            .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+                    }
+                    .width(min: 120, ideal: 140)
                 }
-                .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+                .frame(width: max(geometry.size.width, minimumTableWidth))
+                .focusable()
+                .focused($tableIsFocused)
             }
-            .width(min: 260, ideal: 420)
-
-            TableColumn("Progress") { item in
-                // ProgressView 顯示條狀進度，右邊用文字顯示百分比。
-                HStack(spacing: 8) {
-                    ProgressView(value: item.progress)
-                        .frame(minWidth: 90)
-
-                    Text(item.percentText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 44, alignment: .trailing)
-                }
-                    .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
-            }
-            .width(min: 160, ideal: 210)
-
-            TableColumn("Status") { item in
-                Text(item.statusText)
-                    .foregroundStyle(item.status.color)
-                    .lineLimit(1)
-                    .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
-            }
-            .width(min: 350, ideal: 410)
-
-            TableColumn("Speed") { item in
-                // monospacedDigit 讓速度數字跳動時欄位比較穩定。
-                Text(item.speedText)
-                    .monospacedDigit()
-                    .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
-            }
-            .width(min: 120, ideal: 140)
         }
-        .focusable()
-        .focused($tableIsFocused)
         .overlay {
             if items.isEmpty {
                 // macOS 內建空狀態元件，比手寫 placeholder 更像系統 App。
@@ -104,6 +109,12 @@ struct DownloadsListView: View {
         let visibleIDs = Set(items.map(\.id))
         downloadManager.selectedItemIDs.formIntersection(visibleIDs)
     }
+
+    /// Table 欄位加總後需要的最小寬度。
+    ///
+    /// 視窗少於這個寬度時使用水平 scrollbar；大於這個寬度時只填滿視窗，
+    /// 不額外製造右側空白。
+    private var minimumTableWidth: CGFloat { 1_040 }
 
     /// 讓列表重新取得鍵盤焦點，selection 才會用藍色顯示。
     private func focusTable() {
