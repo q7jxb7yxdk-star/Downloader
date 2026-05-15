@@ -76,6 +76,7 @@ UI 不直接碰 URLSession 或 libtorrent。它只呼叫 `DownloadManager`，這
 - 接收 HTTP / BT engine 的進度回報。
 - 完成後計算平均速度。
 - BT metadata 找到後，觸發檔案選擇 sheet。
+- 合併高頻進度更新的保存工作，減少下載中反覆寫入 JSON。
 
 新增下載的核心判斷：
 
@@ -88,6 +89,26 @@ let kind: DownloadKind = url.absoluteString.hasPrefix("magnet:") || url.pathExte
 - `magnet:?xt=...` 交給 BT。
 - `.torrent` 檔案預留給 BT。
 - 其他 URL 交給 HTTP。
+
+### 進度保存節流
+
+下載中，HTTP / BT engine 可能一秒回報多次進度和速度。如果每次都立刻寫入 `downloads.json`，會造成大量磁碟 I/O。
+
+所以 `DownloadManager` 會用兩種保存方式：
+
+- 重要狀態即時保存：新增、暫停、完成、失敗、刪除、還原。
+- 高頻進度延遲保存：下載中的 `progress`、`bytesPerSecond`、BT peer/seed 狀態文字會先更新 UI，再由 `scheduleSave()` 合併保存。
+
+相關方法：
+
+```swift
+private func scheduleSave()
+func flushScheduledSave()
+```
+
+`scheduleSave()` 會把短時間內連續發生的進度更新合併，約 750ms 後才寫入一次 JSON。
+
+`flushScheduledSave()` 用在 App 生命週期邊界，例如視窗消失或 App 變成 inactive/background 時，會立刻保存目前資料，避免 Quit App 前最後一小段進度未寫入。
 
 ## HTTP 下載流程
 
@@ -484,10 +505,18 @@ Table(items, selection: $downloadManager.selectedItemIDs) {
 TableColumn("Status") { item in
     Text(item.statusText)
 }
-.width(min: 350, ideal: 410)
+.width(min: 146, ideal: 323)
 ```
 
 如果想讓 `Status` 欄更闊，就增加 `min` 或 `ideal`。
+
+目前 Table 也設定了總最小闊度：
+
+```swift
+private var minimumTableWidth: CGFloat { 605 }
+```
+
+這個數字應該接近各 column 最小闊度的總和。太大會令 Table 右側出現多餘空白；太小則可能令水平 scrollbar 太早或太遲出現。
 
 ### Status 和 Speed 可能較長的文字
 
@@ -620,6 +649,14 @@ private extension DownloadItem {
 - `.contextMenu`：右鍵時彈出的選單。
 - `Button(role: .destructive)`：危險操作，例如刪除，系統會用比較警告的樣式。
 - `Label("Resume", systemImage: "play.fill")`：文字加圖示。
+- 右鍵前會呼叫 `downloadManager.selectForContextMenu(item)`。
+
+`selectForContextMenu(item)` 的目的：
+
+- 如果右鍵點中的項目已經在多選範圍內，就保留原本多選。
+- 如果右鍵點中的項目不在目前 selection 裡，才改成只選中這一項。
+
+這樣多選幾個下載項目後，右鍵其中一個再按 Delete / Pause / Resume，會操作整個多選範圍，而不是被右鍵那一下打散。
 
 ### 單擊、雙擊和焦點
 
@@ -646,6 +683,10 @@ private extension DownloadItem {
 .simultaneousGesture(
     TapGesture(count: 1).onEnded {
         focusTable()
+        guard !NSEvent.modifierFlags.contains(.command),
+              !NSEvent.modifierFlags.contains(.shift) else {
+            return
+        }
         downloadManager.selectForSingleClick(item)
     }
 )
@@ -654,6 +695,14 @@ private extension DownloadItem {
     downloadManager.showInFinder(item)
 }
 ```
+
+這段 `guard` 很重要：
+
+- 普通單擊：由 `selectForSingleClick(item)` 選中一項。
+- `Command-click`：交回 macOS Table 原生多選。
+- `Shift-click`：交回 macOS Table 原生範圍選取。
+
+如果沒有這段判斷，自訂單擊手勢會把 Command / Shift 多選又改回單選。
 
 ### 新增下載視窗
 
@@ -786,6 +835,8 @@ Button("Delete Download") {
 ```
 
 - App 重開時把舊的 `downloading` 任務改成 `paused`，避免顯示錯誤狀態。
+- 下載中進度不會每次 callback 都立即保存，而是由 `DownloadManager.scheduleSave()` 合併後再寫入。
+- App 變成 inactive/background，或 `ContentView` 消失時，會呼叫 `flushScheduledSave()` 立刻保存等待中的進度。
 
 `FolderBookmarkStore.swift`
 
@@ -861,7 +912,7 @@ https://httpbin.org/stream-bytes/<bytes>
 
 ## Safari Extension 清理
 
-如果 Safari Extension 曾經出現同名、舊版本或冇用的 `Downloader Extension`，可以先刪除 Xcode 產生的 DerivedData。Xcode 按 Run / Build 後會重新產生這些資料夾。
+如果 Safari Extension 曾經出現同名、舊版本或冇用的 `Downloader Extension`，才需要清理 Xcode 產生的 DerivedData。平時不用經常刪除；Xcode 按 Run / Build 後會重新產生這些資料夾。
 
 ```zsh
 rm -rf ~/Documents/Xcode/Downloader/Build/DerivedData
