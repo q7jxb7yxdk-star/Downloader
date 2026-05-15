@@ -32,12 +32,8 @@ struct DownloadsListView: View {
                             Image(systemName: item.kind.icon)
                                 .foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name)
-                                    .lineLimit(1)
-                                Text(item.source.absoluteString)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                                AdaptiveTooltipText(item.name)
+                                AdaptiveTooltipText(item.source.absoluteString, font: .caption, color: .secondary)
                             }
                         }
                         .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
@@ -119,6 +115,42 @@ struct DownloadsListView: View {
     /// 讓列表重新取得鍵盤焦點，selection 才會用藍色顯示。
     private func focusTable() {
         tableIsFocused = true
+    }
+}
+
+/// 一行會截斷的文字，但滑鼠移上去時會顯示完整內容。
+///
+/// SwiftUI 內建 `.help(...)` 由 macOS 系統控制，寬度不能細調。
+/// 這個自訂 popover 會按照內容自動調整寬度，並用 maxWidth 避免太長的 URL 撐出螢幕。
+private struct AdaptiveTooltipText: View {
+    let text: String
+    let font: Font
+    let color: Color
+
+    @State private var isHovering = false
+
+    init(_ text: String, font: Font = .body, color: Color = .primary) {
+        self.text = text
+        self.font = font
+        self.color = color
+    }
+
+    var body: some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .onHover { hovering in
+                isHovering = hovering
+            }
+            .popover(isPresented: $isHovering, arrowEdge: .top) {
+                Text(text)
+                    .font(font)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 1024, alignment: .leading)
+                    .padding(10)
+            }
     }
 }
 
