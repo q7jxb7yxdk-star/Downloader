@@ -489,6 +489,39 @@ TableColumn("Status") { item in
 
 如果想讓 `Status` 欄更闊，就增加 `min` 或 `ideal`。
 
+### Status 和 Speed 可能較長的文字
+
+調整 `Status` 和 `Speed` 欄寬時，可以用下面文字作參考。
+
+Status 可能較長的顯示文字：
+
+```text
+Downloading - seeds 123, peers 456, candidates 789（用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 322.7 pt）
+Finding metadata - peers 123, candidates 456
+Preparing selected files - seeds 123, peers 456, candidates 789
+Waiting for file selection
+Unable to create incomplete file
+single connection （用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 106.75 pt）
+Retrying connection 3/3
+Complete （用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 58.39 pt）
+Failed: <錯誤訊息>
+Not Available: <錯誤訊息>
+```
+
+注意：`Failed: <錯誤訊息>` 和 `Not Available: <錯誤訊息>` 後面的錯誤訊息沒有固定長度，實際可能超過欄位闊度。這類文字適合截斷，再用 tooltip 顯示完整內容。
+
+Speed 可能較長的顯示文字：
+
+```text
+Avg 999.9 MiB/s（用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 98.89 pt）
+Avg 1.0 GiB/s
+999.9 MiB/s
+1.0 GiB/s（用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 52.45 pt）
+-
+```
+
+Speed 文字由 `ByteCountFormatter` 產生，實際單位可能是 `KiB/s`、`MiB/s` 或 `GiB/s`。
+
 ### 水平捲動條
 
 位置：`Downloader/UI/DownloadsListView.swift`

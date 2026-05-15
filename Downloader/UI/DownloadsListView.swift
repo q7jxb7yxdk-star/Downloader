@@ -42,19 +42,19 @@ struct DownloadsListView: View {
 
                     TableColumn("Progress") { item in
                         // ProgressView 顯示條狀進度，右邊用文字顯示百分比。
-                        HStack(spacing: 8) {
+                        HStack(spacing: 1) {
                             ProgressView(value: item.progress)
-                                .frame(minWidth: 90)
+                                .frame(minWidth: 64)
 
                             Text(item.percentText)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
-                                .frame(width: 44, alignment: .trailing)
+                                .frame(width: 35, alignment: .trailing)
                         }
                             .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 160, ideal: 210)
+                    .width(min: 100, ideal: 110)
 
                     TableColumn("Status") { item in
                         Text(item.statusText)
@@ -62,7 +62,7 @@ struct DownloadsListView: View {
                             .lineLimit(1)
                             .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 350, ideal: 410)
+                    .width(min: 59, ideal: 107)
 
                     TableColumn("Speed") { item in
                         // monospacedDigit 讓速度數字跳動時欄位比較穩定。
@@ -70,7 +70,7 @@ struct DownloadsListView: View {
                             .monospacedDigit()
                             .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 120, ideal: 140)
+                    .width(min: 53, ideal: 99)
                 }
                 .frame(width: max(geometry.size.width, minimumTableWidth))
                 .focusable()
