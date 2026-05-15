@@ -234,6 +234,16 @@ final class DownloadManager: NSObject, ObservableObject {
         scheduleSave()
     }
 
+    /// App 即將關閉、隱藏或進入背景時，立刻寫入等待中的進度。
+    ///
+    /// `scheduleSave()` 會延遲保存以減少磁碟寫入；這個方法則補上生命週期邊界，
+    /// 避免使用者剛好在延遲保存前 Quit App 時，最後一小段進度沒有落盤。
+    func flushScheduledSave() {
+        scheduledSaveTask?.cancel()
+        scheduledSaveTask = nil
+        store.save(items)
+    }
+
     /// Engine 回報下載完成。
     ///
     /// 這裡同時計算平均速度，並觸發 macOS 系統通知。

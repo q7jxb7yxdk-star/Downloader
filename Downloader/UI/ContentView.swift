@@ -120,6 +120,8 @@ struct ContentView: View {
             }
         }
         .onDisappear {
+            downloadManager.flushScheduledSave()
+
             safariQueueTimer?.invalidate()
             safariQueueTimer = nil
 

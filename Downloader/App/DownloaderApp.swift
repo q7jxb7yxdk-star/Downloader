@@ -102,6 +102,7 @@ struct DownloaderApp: App {
     ///
     /// 用 `@StateObject` 讓它由 App 生命週期持有，不會因畫面重畫而重建。
     @StateObject private var downloadManager = DownloadManager()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         Window("Downloader", id: "main") {
@@ -109,6 +110,10 @@ struct DownloaderApp: App {
                 // 透過 EnvironmentObject 傳給所有子 View，避免每層手動傳參數。
                 .environmentObject(downloadManager)
                 .frame(minWidth: 980, minHeight: 620)
+                .onChange(of: scenePhase) { _, newPhase in
+                    guard newPhase != .active else { return }
+                    downloadManager.flushScheduledSave()
+                }
         }
         .commands {
             CommandGroup(after: .newItem) {
