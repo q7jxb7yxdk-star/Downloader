@@ -73,6 +73,17 @@ final class DownloadManager: NSObject, ObservableObject {
         selectedItemIDs = [item.id]
     }
 
+    /// 右鍵選單打開前整理 selection。
+    ///
+    /// 如果右鍵點中的項目已經在多選範圍內，就保留原本多選；
+    /// 如果不是，才改成只選中這一個項目。
+    func selectForContextMenu(_ item: DownloadItem) {
+        guard items.contains(where: { $0.id == item.id }) else { return }
+        if !selectedItemIDs.contains(item.id) {
+            selectedItemIDs = [item.id]
+        }
+    }
+
     /// 暫停目前選中的任務。
     func pauseSelected() {
         for item in selectedItems where !item.isTrashed {

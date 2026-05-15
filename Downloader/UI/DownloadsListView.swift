@@ -60,9 +60,10 @@ struct DownloadsListView: View {
                         Text(item.statusText)
                             .foregroundStyle(item.status.color)
                             .lineLimit(1)
+                            .help(item.statusText)
                             .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 59, ideal: 107)
+                    .width(min: 146, ideal: 323)
 
                     TableColumn("Speed") { item in
                         // monospacedDigit 讓速度數字跳動時欄位比較穩定。
@@ -110,7 +111,7 @@ struct DownloadsListView: View {
     ///
     /// 視窗少於這個寬度時使用水平 scrollbar；大於這個寬度時只填滿視窗，
     /// 不額外製造右側空白。
-    private var minimumTableWidth: CGFloat { 1_040 }
+    private var minimumTableWidth: CGFloat { 605 }
 
     /// 讓列表重新取得鍵盤焦點，selection 才會用藍色顯示。
     private func focusTable() {
@@ -127,7 +128,9 @@ private struct AdaptiveTooltipText: View {
     let font: Font
     let color: Color
 
+    @State private var isPointerInside = false
     @State private var isHovering = false
+    @State private var hoverTask: Task<Void, Never>?
 
     init(_ text: String, font: Font = .body, color: Color = .primary) {
         self.text = text
@@ -141,7 +144,18 @@ private struct AdaptiveTooltipText: View {
             .foregroundStyle(color)
             .lineLimit(1)
             .onHover { hovering in
-                isHovering = hovering
+                isPointerInside = hovering
+                hoverTask?.cancel()
+
+                if hovering {
+                    hoverTask = Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(450))
+                        guard !Task.isCancelled, isPointerInside else { return }
+                        isHovering = true
+                    }
+                } else {
+                    isHovering = false
+                }
             }
             .popover(isPresented: $isHovering, arrowEdge: .top) {
                 Text(text)
@@ -150,6 +164,9 @@ private struct AdaptiveTooltipText: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 1024, alignment: .leading)
                     .padding(10)
+            }
+            .onDisappear {
+                hoverTask?.cancel()
             }
     }
 }
@@ -188,7 +205,7 @@ private extension View {
             .contextMenu {
                 if !item.isTrashed {
                     Button {
-                        downloadManager.selectedItemIDs = [item.id]
+                        downloadManager.selectForContextMenu(item)
                         downloadManager.resumeSelected()
                     } label: {
                         Label("Resume", systemImage: "play.fill")
@@ -196,7 +213,7 @@ private extension View {
                     .disabled(item.status == .downloading || item.status == .completed)
 
                     Button {
-                        downloadManager.selectedItemIDs = [item.id]
+                        downloadManager.selectForContextMenu(item)
                         downloadManager.pauseSelected()
                     } label: {
                         Label("Pause", systemImage: "pause.fill")
@@ -216,7 +233,7 @@ private extension View {
                 Divider()
 
                 Button(role: .destructive) {
-                    downloadManager.selectedItemIDs = [item.id]
+                    downloadManager.selectForContextMenu(item)
                     downloadManager.deleteSelected()
                 } label: {
                     Label("Delete", systemImage: "trash")
