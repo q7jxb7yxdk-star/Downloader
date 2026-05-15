@@ -27,8 +27,11 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         content.title = "Download Complete"
         content.body = name
+        // `.default` 讓系統用目前通知設定播放預設提示音。
+        // 如果使用者開了勿擾模式，這裡仍可能不彈 banner 或不出聲，這是系統行為。
         content.sound = .default
 
+        // identifier 用 UUID，避免多個下載完成時後一個通知覆蓋前一個。
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { error in
             if let error {

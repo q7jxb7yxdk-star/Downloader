@@ -102,6 +102,8 @@ struct DownloaderApp: App {
     ///
     /// 用 `@StateObject` 讓它由 App 生命週期持有，不會因畫面重畫而重建。
     @StateObject private var downloadManager = DownloadManager()
+    /// SwiftUI 提供的場景狀態：active、inactive、background。
+    /// 我們用它在 App 離開前 flush 下載列表，避免延遲保存尚未寫入。
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

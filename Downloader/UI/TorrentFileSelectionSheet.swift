@@ -43,6 +43,7 @@ struct TorrentFileSelectionSheet: View {
             List(selection.files) { file in
                 Toggle(isOn: binding(for: file.index)) {
                     HStack {
+                        // 這裡顯示 torrent 內的原始相對路徑，可能包含資料夾名稱。
                         Text(file.path)
                             .lineLimit(1)
 
@@ -88,8 +89,11 @@ struct TorrentFileSelectionSheet: View {
     /// 把 Set<Int> 包成 Toggle 需要的 Binding<Bool>。
     private func binding(for index: Int) -> Binding<Bool> {
         Binding(
+            // Toggle 需要 Bool，但我們真正保存的是 Set<Int>。
+            // get 負責把「index 是否在 Set 裡」轉成 checkbox 狀態。
             get: { selectedIndexes.contains(index) },
             set: { isSelected in
+                // set 負責把使用者勾選/取消勾選同步回 Set。
                 if isSelected {
                     selectedIndexes.insert(index)
                 } else {

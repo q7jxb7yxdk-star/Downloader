@@ -195,6 +195,8 @@ private extension View {
             .simultaneousGesture(
                 TapGesture(count: 1).onEnded {
                     focusTable()
+                    // Command-click / Shift-click 是 macOS Table 內建多選手勢。
+                    // 如果這裡也改 selection，會把原生多選又變回單選。
                     guard !NSEvent.modifierFlags.contains(.command),
                           !NSEvent.modifierFlags.contains(.shift) else {
                         return
@@ -209,6 +211,7 @@ private extension View {
             .contextMenu {
                 if !item.isTrashed {
                     Button {
+                        // 右鍵時先整理 selection，確保多選狀態下會操作整批項目。
                         downloadManager.selectForContextMenu(item)
                         downloadManager.resumeSelected()
                     } label: {
@@ -217,6 +220,7 @@ private extension View {
                     .disabled(item.status == .downloading || item.status == .completed)
 
                     Button {
+                        // 如果右鍵點中的項目已經在 selection 裡，這行會保留原本多選。
                         downloadManager.selectForContextMenu(item)
                         downloadManager.pauseSelected()
                     } label: {
@@ -237,6 +241,8 @@ private extension View {
                 Divider()
 
                 Button(role: .destructive) {
+                    // All/Active/Paused/Completed 分頁是移到 Trash；
+                    // Trash 分頁內再次 Delete 才會永久刪除列表項目。
                     downloadManager.selectForContextMenu(item)
                     downloadManager.deleteSelected()
                 } label: {

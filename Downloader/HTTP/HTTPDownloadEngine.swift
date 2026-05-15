@@ -60,19 +60,33 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
 
     /// 下列 dictionary 都是用 download item id 或 task id，把非同步 callback 對回正確任務。
     private var taskPurposes: [Int: TaskPurpose] = [:]
+    /// 單連線模式的 URLSessionDataTask。key 是 DownloadItem.ID。
     private var singleDataTasksByID: [DownloadItem.ID: URLSessionDataTask] = [:]
+    /// 分段模式的所有 URLSessionDataTask。每個 item 會有多條連線。
     private var dataTasksByID: [DownloadItem.ID: [URLSessionDataTask]] = [:]
+    /// 保存原始 DownloadItem，讓 callback 裡仍然知道檔名和下載資料夾。
     private var itemsByID: [DownloadItem.ID: DownloadItem] = [:]
+    /// 記錄重試次數，避免網絡一直失敗時無限重試。
     private var retryCounts: [DownloadItem.ID: Int] = [:]
+    /// 上一次速度取樣。用來計算「這 0.5 秒下載了多少 byte」。
     private var lastSamples: [DownloadItem.ID: (date: Date, bytes: Int64)] = [:]
+    /// 顯示給 UI 的平滑速度，避免數字跳得太誇張。
     private var displayedSpeeds: [DownloadItem.ID: Int64] = [:]
+    /// 分段下載中的完整狀態，包括每段 range、暫存檔和最終檔案位置。
     private var segmentedDownloads: [DownloadItem.ID: SegmentedDownloadState] = [:]
+    /// 單連線模式的 `.part-0.tmp` 檔案位置。
     private var incompleteFilesByID: [DownloadItem.ID: URL] = [:]
+    /// 單連線最終目標檔案位置。預留給需要直接定位 target 的流程。
     private var singleTargetURLsByID: [DownloadItem.ID: URL] = [:]
+    /// 單連線目前預期總大小。server 不提供 Content-Length 時可能是 0。
     private var singleExpectedBytesByID: [DownloadItem.ID: Int64] = [:]
+    /// 單連線目前已收到 byte 數。暫停續傳時會由本地檔案大小開始。
     private var singleReceivedBytesByID: [DownloadItem.ID: Int64] = [:]
+    /// 每個單線 task 的起始 offset，用來判斷 response 應該 append 還是重寫。
     private var singleStartOffsetsByTaskID: [Int: Int64] = [:]
+    /// 正在由單線切換到分段的 item。取消舊 task 時不要誤判為真正失敗。
     private var switchingToSegmentedIDs: Set<DownloadItem.ID> = []
+    /// 每個 task 對應的檔案寫入 stream。收到 data callback 時直接寫入磁碟。
     private var outputStreams: [Int: OutputStream] = [:]
 
     init(delegate: HTTPDownloadEngineDelegate) {
@@ -391,6 +405,8 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
             let startOffset = singleStartOffsetsByTaskID[dataTask.taskIdentifier] ?? 0
             let shouldAppend = httpResponse.statusCode == 206 && startOffset > 0
             if !shouldAppend {
+                // 如果 server 回 200，代表它沒有接續 Range，而是從頭傳。
+                // 這時必須清空原本 `.part-0.tmp`，避免新舊資料混在一起。
                 try? Data().write(to: fileURL)
                 singleStartOffsetsByTaskID[dataTask.taskIdentifier] = 0
                 singleReceivedBytesByID[id] = 0
@@ -565,6 +581,8 @@ private extension HTTPDownloadEngine {
                 defer { try? input.close() }
 
                 while true {
+                    // 分段檔可能很大，所以用 1 MB chunk 逐步合併，
+                    // 避免一次把整個檔案讀進記憶體。
                     let data = try input.read(upToCount: 1024 * 1024) ?? Data()
                     if data.isEmpty { break }
                     try output.write(contentsOf: data)

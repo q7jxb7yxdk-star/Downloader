@@ -154,6 +154,8 @@ final class TorrentDownloadEngine {
             guard !pausedItemIDs.contains(itemID) else { continue }
 
             let status = bridge.status(forIdentifier: torrentID)
+            // Objective-C++ bridge 回傳 NSDictionary，Swift 這邊逐個欄位轉回強型別。
+            // 如果某個欄位缺失，就用安全預設值，避免 UI 因為 bridge 回傳異常而 crash。
             let progress = (status["progress"] as? NSNumber)?.doubleValue ?? 0
             let payloadSpeed = (status["downloadPayloadRate"] as? NSNumber)?.int64Value ?? 0
             let expected = (status["totalWanted"] as? NSNumber)?.int64Value ?? 0
@@ -191,6 +193,8 @@ final class TorrentDownloadEngine {
 
                 if !files.isEmpty {
                     if let savedIndexes = selectedFileIndexesByItemID[itemID], !savedIndexes.isEmpty {
+                        // App 重開後，如果列表裡已經保存了使用者之前選過的檔案，
+                        // 就直接套用 selection，不再彈一次選檔視窗。
                         let indexSet = NSMutableIndexSet()
                         for index in savedIndexes {
                             indexSet.add(index)
@@ -224,6 +228,8 @@ final class TorrentDownloadEngine {
                 let saveFolder = saveFoldersByTorrentID[torrentID] ?? FolderBookmarkStore.fallbackFolder
                 // 完成後把 `.tmp` 檔名還原成原本檔名。
                 bridge.restoreOriginalFileNames(torrentID)
+                // BT 可能包含多個檔案，所以這裡回報的是保存資料夾，
+                // Finder 打開時會讓使用者看到整個下載位置。
                 delegate?.complete(id: itemID, fileURL: saveFolder)
                 completedTorrentIDs.append(torrentID)
             } else {
@@ -238,6 +244,8 @@ final class TorrentDownloadEngine {
 
         for torrentID in completedTorrentIDs {
             let completedItemID = itemIDsByTorrentID[torrentID]
+            // torrent 已完成後，Swift 層不再需要追蹤這個 libtorrent handle。
+            // 清乾淨可以避免 timer 一直輪詢已完成任務，也釋放 sandbox access。
             itemIDsByTorrentID[torrentID] = nil
             saveFoldersByTorrentID[torrentID] = nil
             metadataPollCountsByTorrentID[torrentID] = nil

@@ -65,8 +65,11 @@ enum FolderBookmarkStore {
     ///
     /// 呼叫者只要把需要讀寫的程式碼放進 closure，這裡會自動負責開始和結束存取。
     static func withAccess<T>(to folder: URL, perform work: () throws -> T) rethrows -> T {
+        // 對非 sandbox bookmark 資料夾，例如系統 Downloads，這個方法可能回傳 false。
+        // false 不一定代表錯誤，只代表系統不需要或不能開啟額外 security scope。
         let didStartAccessing = folder.startAccessingSecurityScopedResource()
         defer {
+            // start / stop 必須成對出現；用 defer 可以確保 work 即使 throw error 也會釋放權限。
             if didStartAccessing {
                 folder.stopAccessingSecurityScopedResource()
             }

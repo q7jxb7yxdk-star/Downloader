@@ -57,7 +57,9 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
     var source: URL
+    /// 使用者選擇的保存資料夾；nil 時使用 fallback Downloads folder。
     var destination: URL?
+    /// 完成後的實際檔案位置。BT 多檔案時可能是保存資料夾。
     var localFileURL: URL?
     var kind: DownloadKind
     var status: DownloadStatus = .queued
@@ -66,9 +68,13 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var bytesExpected: Int64 = 0
     var bytesPerSecond: Int64 = 0
     var averageBytesPerSecond: Int64 = 0
+    /// BT 使用：保存使用者選中的 torrent file indexes，方便 App 重開後繼續。
     var selectedTorrentFileIndexes: Set<Int> = []
+    /// 軟刪除標記。true 代表顯示在 Trash，而不是立刻從 JSON 移除。
     var isTrashed = false
+    /// 從 Trash 還原時用來回復原本狀態。
     var statusBeforeTrash: DownloadStatus?
+    /// 失敗訊息；下載中也借用它顯示補充狀態，例如 seeds/peers。
     var errorMessage: String?
     var createdAt = Date()
 

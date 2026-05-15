@@ -24,6 +24,8 @@ struct AddDownloadSheet: View {
             Text("Add Download")
                 .font(.title2.bold())
 
+            // SwiftUI 的 TextField 使用雙向 binding：
+            // 使用者輸入會改變 urlText；urlText 改變也會反映回畫面。
             TextField("URL or magnet link", text: $urlText)
                 .textFieldStyle(.roundedBorder)
 
@@ -96,6 +98,7 @@ struct AddDownloadSheet: View {
 
         if panel.runModal() == .OK {
             guard let url = panel.url else { return }
+            // .torrent 檔案本身是本機 URL，但下載內容仍會保存到 destination。
             FolderBookmarkStore.save(folder: destination)
             downloadManager.add(url: url, destination: destination)
             dismiss()
