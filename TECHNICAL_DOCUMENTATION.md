@@ -1,36 +1,12 @@
-# Downloader 技術文件
+# Downloader Technical Documentation
 
-這份文件用來解釋 `Downloader` App 的功能、架構和主要程式碼。目標是讓你不只知道「哪個檔案做甚麼」，也理解為甚麼要這樣拆。
+這份文件是 `Downloader` 的深入技術說明，重點是幫你理解「功能在哪裡」、「代碼為什麼這樣拆」、「如果要修改，應該搜尋什麼」。
 
-## 功能介紹
+如果只是想快速知道專案怎樣 build、怎樣用，先看 `README.md`。
 
-`Downloader` 是一個 macOS SwiftUI 下載器，方向類似 Folx：
+## Architecture
 
-- 支援一般 HTTP/HTTPS 下載。
-- 支援 HTTP Range 分段下載，大檔案可用 4 條連線同時下載。
-- 支援暫停、繼續、刪除下載任務。
-- 支援 magnet / BT 下載，透過內嵌 `libtorrent-rasterbar.xcframework`，使用者不需要另外安裝 libtorrent。
-- BT 找到 metadata 後，可以選擇 torrent 內要下載的檔案。
-- 未完成檔案會直接顯示在使用者選擇的資料夾，並使用 `.tmp` 或 `.part-N.tmp` 名稱。
-- 下載完成後會顯示平均下載速度，並發送 macOS 系統通知。
-- 下載資料夾會被記住，下次新增下載時自動使用上次選擇的位置。
-
-## 整體架構
-
-App 分成幾層：
-
-| 層級 | 主要檔案 | 職責 |
-| --- | --- | --- |
-| App 入口 | `DownloaderApp.swift` | 建立主視窗、注入 `DownloadManager`、設定選單 |
-| UI | `ContentView.swift`, `DownloadsListView.swift`, `AddDownloadSheet.swift`, `TorrentFileSelectionSheet.swift` | 顯示畫面、處理使用者操作 |
-| 狀態管理 | `DownloadManager.swift` | 保存下載列表、分派任務、接收 engine 回報 |
-| HTTP engine | `HTTPDownloadEngine.swift` | 一般下載、Range 探測、分段下載、暫停續傳 |
-| BT engine | `TorrentDownloadEngine.swift` | Swift 層 BT 流程、metadata 輪詢、選檔案邏輯 |
-| libtorrent bridge | `TorrentSessionBridge.h/.mm` | Objective-C++ 包裝 C++ libtorrent API |
-| 持久化 | `DownloadStore.swift`, `FolderBookmarkStore.swift` | 保存下載列表、保存 sandbox 資料夾權限 |
-| 通知 | `NotificationManager.swift` | 下載完成通知 |
-
-大概流程是：
+Downloader 採用 SwiftUI + manager + engine 的分層方式：
 
 ```text
 SwiftUI UI
@@ -41,109 +17,151 @@ SwiftUI UI
               -> libtorrent
 ```
 
-UI 不直接碰 URLSession 或 libtorrent。它只呼叫 `DownloadManager`，這樣畫面會比較乾淨。
+UI 不直接操作 `URLSession` 或 libtorrent。畫面只呼叫 `DownloadManager`，由 manager 決定任務交給 HTTP engine 還是 BT engine。
 
-## 下載資料模型
+| Layer | Main Files | Responsibility |
+| --- | --- | --- |
+| App | `Downloader/App/DownloaderApp.swift` | App entry, window, menu commands, lifecycle save |
+| UI | `Downloader/UI/*.swift` | SwiftUI screens, toolbar, table, sheets |
+| Core | `Downloader/Core/DownloadManager.swift` | Central app state and command routing |
+| Model | `Downloader/Core/DownloadItem.swift` | Codable download task model |
+| HTTP | `Downloader/HTTP/HTTPDownloadEngine.swift` | HTTP download, Range probing, segmented download |
+| Torrent | `Downloader/Torrent/TorrentDownloadEngine.swift` | Swift-side BT flow and polling |
+| Bridge | `Downloader/Torrent/TorrentSessionBridge.h/.mm` | Objective-C++ wrapper around C++ libtorrent |
+| Persistence | `Downloader/Persistence/*.swift` | JSON task storage and security-scoped folder bookmarks |
+| Notifications | `Downloader/Notifications/NotificationManager.swift` | Completion notification and sound |
+| Browser | `Downloader/BrowserIntegration/URLSchemeHandler.swift` | Custom URL scheme parsing |
 
-核心 model 在 `Downloader/Core/DownloadItem.swift`。
+## DownloadItem
 
-`DownloadItem` 代表一個下載任務，包含：
+Location:
 
-- `id`：任務唯一識別。
-- `name`：列表顯示名稱。
-- `source`：下載來源 URL 或 magnet link。
-- `destination`：使用者選擇的下載資料夾。
-- `kind`：`http` 或 `torrent`。
-- `status`：queued、downloading、paused、completed、failed 等。
-- `progress`：0 到 1 的進度。
-- `bytesReceived` / `bytesExpected`：已下載和總大小。
-- `bytesPerSecond`：即時速度。
-- `averageBytesPerSecond`：完成後平均速度。
-- `errorMessage`：失敗訊息，也會用來顯示 BT peer/seed 狀態。
+```text
+Downloader/Core/DownloadItem.swift
+```
 
-`DownloadItem` 有自訂 `Codable` 解碼，是為了向下兼容。日後新增欄位時，舊版 `downloads.json` 沒有新欄位也可以正常載入。
+`DownloadItem` is the saved model for each task.
+
+Important fields:
+
+- `id`: stable UUID used by table selection and engines.
+- `name`: display name and output filename.
+- `source`: HTTP URL, magnet link, or local `.torrent` URL.
+- `destination`: selected download folder.
+- `localFileURL`: completed file path, or BT output folder for multi-file torrents.
+- `kind`: `.http` or `.torrent`.
+- `status`: queued, downloading, paused, completed, failed, unavailable.
+- `progress`: `0...1`.
+- `bytesReceived` / `bytesExpected`: downloaded and total byte count.
+- `bytesPerSecond`: live speed.
+- `averageBytesPerSecond`: final average speed.
+- `selectedTorrentFileIndexes`: saved BT file selection for resume after app restart.
+- `isTrashed`: soft-delete flag.
+- `statusBeforeTrash`: original status used when restoring from Trash.
+- `errorMessage`: error text, also reused for status details such as seeds/peers.
+
+`DownloadItem` has a custom `Codable` decoder so older `downloads.json` files can still load after new fields are added.
 
 ## DownloadManager
 
-`Downloader/Core/DownloadManager.swift` 是 App 的中央控制器。
+Location:
 
-它負責：
-
-- 保存 `items`，讓 SwiftUI 列表自動更新。
-- 記住目前選中的下載項目。
-- 新增下載時判斷是 HTTP 還是 BT。
-- 暫停、繼續、刪除目前選中的任務。
-- 接收 HTTP / BT engine 的進度回報。
-- 完成後計算平均速度。
-- BT metadata 找到後，觸發檔案選擇 sheet。
-- 合併高頻進度更新的保存工作，減少下載中反覆寫入 JSON。
-
-新增下載的核心判斷：
-
-```swift
-let kind: DownloadKind = url.absoluteString.hasPrefix("magnet:") || url.pathExtension == "torrent" ? .torrent : .http
+```text
+Downloader/Core/DownloadManager.swift
 ```
 
-這代表：
+`DownloadManager` is the central controller.
 
-- `magnet:?xt=...` 交給 BT。
-- `.torrent` 檔案預留給 BT。
-- 其他 URL 交給 HTTP。
+It handles:
 
-### 進度保存節流
+- `@Published var items`: the list displayed by SwiftUI.
+- `selectedItemIDs`: current table selection.
+- Adding new tasks.
+- Pause / resume / delete / restore.
+- Routing tasks to HTTP or BT engines.
+- Receiving engine progress callbacks.
+- Completing tasks and calculating average speed.
+- Showing BT file selection sheets.
+- Saving task state to disk.
 
-下載中，HTTP / BT engine 可能一秒回報多次進度和速度。如果每次都立刻寫入 `downloads.json`，會造成大量磁碟 I/O。
+Task type is detected with:
 
-所以 `DownloadManager` 會用兩種保存方式：
+```swift
+let kind: DownloadKind = url.absoluteString.hasPrefix("magnet:")
+    || url.pathExtension.lowercased() == "torrent"
+    ? .torrent
+    : .http
+```
 
-- 重要狀態即時保存：新增、暫停、完成、失敗、刪除、還原。
-- 高頻進度延遲保存：下載中的 `progress`、`bytesPerSecond`、BT peer/seed 狀態文字會先更新 UI，再由 `scheduleSave()` 合併保存。
+Meaning:
 
-相關方法：
+- `magnet:?xt=...` uses BT.
+- `.torrent` uses BT.
+- Everything else uses HTTP.
+
+### Progress Save Throttling
+
+Download progress and speed can update many times per second. Saving `downloads.json` on every callback would cause unnecessary disk I/O.
+
+Downloader uses two save styles:
+
+- Important state changes save immediately: add, pause, complete, fail, delete, restore.
+- High-frequency progress changes are merged by `scheduleSave()`.
+
+Important methods:
 
 ```swift
 private func scheduleSave()
 func flushScheduledSave()
 ```
 
-`scheduleSave()` 會把短時間內連續發生的進度更新合併，約 750ms 後才寫入一次 JSON。
+`scheduleSave()` waits about 750ms before writing JSON. Continuous progress updates cancel and reschedule the pending save.
 
-`flushScheduledSave()` 用在 App 生命週期邊界，例如視窗消失或 App 變成 inactive/background 時，會立刻保存目前資料，避免 Quit App 前最後一小段進度未寫入。
+`flushScheduledSave()` forces a save when the app becomes inactive/background or the main view disappears, so the last bit of progress is not lost when quitting.
 
-## HTTP 下載流程
+## HTTP Download Flow
 
-HTTP engine 在 `Downloader/HTTP/HTTPDownloadEngine.swift`。
+Location:
 
-### 1. 立即開始並背景探測 Range
+```text
+Downloader/HTTP/HTTPDownloadEngine.swift
+```
 
-建立 HTTP 任務後，App 會立即用單連線串流下載到 `filename.tmp`，不再先等 Range 探測完成。
+The HTTP engine supports immediate single-connection download and automatic segmented upgrade.
 
-同時，App 會在背景送出：
+### Single Connection Start
+
+When a HTTP task starts:
+
+1. Create `filename.part-0.tmp` in the selected folder.
+2. Start a `URLSessionDataTask`.
+3. Stream incoming data directly to disk.
+4. In parallel, probe Range support.
+
+The app does not wait for Range probing before starting the download. This makes normal downloads begin faster.
+
+### Range Probe
+
+The probe sends:
 
 ```text
 Range: bytes=0-0
 ```
 
-如果 server 回傳 `206 Partial Content`，代表支援 Range。App 就可以把大檔案切成多段。
+If the response is `206 Partial Content`, the server supports byte ranges.
 
-如果 server 不支援 Range，或檔案小於 8 MB，就保持單連線下載。
+If the server supports Range and the file is large enough, Downloader can upgrade to segmented download.
 
-### 2. 單連線下載
+### Segmented Download
 
-單連線使用 `URLSessionDataTask`。
+Default setting:
 
-優點：
+```swift
+private static let segmentedThreadCount = 4
+private static let minimumSegmentedSize: Int64 = 8 * 1024 * 1024
+```
 
-- 可以一建立任務就立即開始下載。
-- App 可以直接把資料寫入使用者資料夾內的 `.tmp`。
-- 暫停後可根據 `.tmp` 檔案大小，用 HTTP Range 接續下載。
-- 完成後再把 `.tmp` 改成正式檔名。
-
-App 也會先建立一個 `filename.tmp` placeholder，讓使用者在 Finder 中看到未完成下載。
-
-### 3. 分段下載
-
-大檔案且支援 Range 時，App 會把「已經下載好的前段」當成第一段，然後把未下載的尾段切成多條連線：
+If the single connection already downloaded bytes `0...A`, that file becomes part 0. The remaining bytes are split across the other connections:
 
 ```text
 Part 0: bytes 0 ... A
@@ -152,7 +170,7 @@ Part 2: bytes B+1 ... C
 Part 3: bytes C+1 ... end
 ```
 
-每段會寫入：
+Temporary files:
 
 ```text
 filename.part-0.tmp
@@ -161,148 +179,137 @@ filename.part-2.tmp
 filename.part-3.tmp
 ```
 
-全部完成後，`mergeSegmentedDownload` 會依 index 順序合併成正式檔案，然後刪除分段 `.tmp`。
+When all segments finish, `mergeSegmentedDownload` joins them in index order and writes the final file.
 
-### 4. HTTP threads / connections 設定位置
+The merge reads 1 MB chunks at a time so large files are not fully loaded into memory.
 
-HTTP 分段下載的連線數在這個檔案設定：
+### Pause and Resume
 
-```text
-Downloader/HTTP/HTTPDownloadEngine.swift
-```
+Single connection resume:
 
-搜尋關鍵字：
+- Check local `.part-0.tmp` file size.
+- Send `Range: bytes=<existingBytes>-`.
+- Append new data if the server returns `206`.
+- Reset and restart if the server returns `200`.
 
-```swift
-segmentedThreadCount
-```
+Segmented resume:
 
-目前會看到類似：
+- Each part knows its original byte range.
+- Each part resumes from `range.lowerBound + received`.
+- Only unfinished parts create new requests.
 
-```swift
-private static let segmentedThreadCount = 4
-```
+### Speed Calculation
 
-這個 `4` 就是一般 HTTP 分段下載最多使用的 threads / connections 數量。
-
-如果改成：
-
-```swift
-private static let segmentedThreadCount = 8
-```
-
-代表支援 Range 的大檔案最多會切成 8 段下載。
-
-不過，不是越多 threads 越快。一般建議：
-
-| Connections | 建議 |
-| ---: | --- |
-| 1 | 最穩定，但不能加速 |
-| 4 | 建議預設值，速度和穩定性較平衡 |
-| 8 | 大檔案可能更快，但較容易波動 |
-| 16 或以上 | 通常不建議，可能被 server 限速或連線失敗 |
-
-是否真的可以多線下載，仍然取決於 server 是否支援 HTTP `Range`。如果 server 不支援 Range，即使 `segmentedThreadCount` 設成 8，Downloader 也只能用 1 條 connection 下載。
-
-### 5. 速度計算
-
-下載速度不是每次 callback 都直接顯示，因為會跳得很亂。App 每 0.5 秒取樣一次，並用簡單加權平均平滑：
+The raw callback speed is noisy. Downloader samples roughly every 0.5 seconds and smooths it:
 
 ```swift
 speed = oldSpeed * 0.7 + instantSpeed * 0.3
 ```
 
-## BT 下載流程
+This keeps the speed column more readable.
 
-BT Swift engine 在 `Downloader/Torrent/TorrentDownloadEngine.swift`，libtorrent bridge 在 `Downloader/Torrent/TorrentSessionBridge.mm`。
+## Torrent Download Flow
 
-### 1. 為甚麼需要 Objective-C++ bridge
-
-Swift 一般 `.swift` 檔不能直接呼叫 C++ libtorrent API，所以用 `.mm` Objective-C++ 檔案包一層：
+Swift engine:
 
 ```text
-Swift -> Objective-C header -> Objective-C++ implementation -> C++ libtorrent
+Downloader/Torrent/TorrentDownloadEngine.swift
 ```
 
-Swift 只看到 `TorrentSessionBridge` 的 Objective-C 方法，不需要知道 C++ 型別。
-
-### 2. Magnet 開始時
-
-`startMagnet` 會：
-
-- 解析 magnet URI。
-- 設定保存資料夾。
-- 啟用 DHT、LSD、UPnP、NAT-PMP。
-- 加入一些公開 tracker。
-- 使用 `upload_mode`，讓 libtorrent 可以找 metadata/peer，但盡量不下載真正檔案 payload。
-- 立即 reannounce tracker / DHT / LSD。
-
-### 3. 找到 metadata 後選檔案
-
-magnet 一開始不知道 torrent 內有哪些檔案，必須先找到 metadata。
-
-`TorrentDownloadEngine` 每 0.25 秒 poll 一次狀態：
-
-- 還沒有 metadata：顯示 Finding metadata，定期 reannounce。
-- 有 metadata：讀出檔案列表，彈出 `TorrentFileSelectionSheet`。
-- 等待選檔案時：所有檔案 priority 設為 `dont_download`。
-
-這樣使用者未選檔案前，不應該正式下載檔案內容。
-
-### 4. 真正開始下載
-
-使用者按 `Start Selected Files` 後：
-
-- 選中的檔案 priority 設為 `default_priority`。
-- 未選中的檔案 priority 設為 `dont_download`。
-- 解除 `upload_mode`。
-- 手動 resume torrent。
-- 重新 announce tracker / DHT / LSD。
-
-### 5. BT 速度顯示
-
-libtorrent 有兩種速度：
-
-- `download_rate`：包含 protocol chatter，例如 metadata、DHT、peer handshake。
-- `download_payload_rate`：真正檔案 payload 速度。
-
-App 使用 `download_payload_rate` 顯示速度，所以未選檔案前找 metadata 的少量網絡流量不會被顯示成下載速度。
-
-## 檔案命名策略
-
-HTTP 單連線：
+Objective-C++ bridge:
 
 ```text
-filename.tmp
-filename
+Downloader/Torrent/TorrentSessionBridge.h
+Downloader/Torrent/TorrentSessionBridge.mm
 ```
 
-HTTP 分段：
+### Why Objective-C++ Bridge Is Needed
+
+Normal Swift files cannot directly call C++ libtorrent APIs. The bridge exposes a small Objective-C API that Swift can import:
+
+```text
+Swift -> Objective-C header -> Objective-C++ .mm -> C++ libtorrent
+```
+
+### Magnet Start
+
+When starting a magnet:
+
+- Parse magnet URI.
+- Set save path.
+- Enable DHT, LSD, UPnP, NAT-PMP.
+- Add public trackers.
+- Start in `upload_mode`.
+- Force tracker / DHT / LSD announce.
+
+`upload_mode` lets libtorrent find metadata and peers while avoiding real payload download before the user selects files.
+
+### Metadata and File Selection
+
+Magnet links do not initially contain the file list. Downloader polls libtorrent every 0.25 seconds:
+
+- No metadata: show `Finding metadata`.
+- Metadata found: read file list.
+- Apply `.tmp` names to incomplete BT files.
+- Show `TorrentFileSelectionSheet`.
+- Set all file priorities to `dont_download` while waiting for user choice.
+
+After the user clicks `Start Selected Files`:
+
+- Selected files get `default_priority`.
+- Unselected files stay `dont_download`.
+- `upload_mode` is cleared.
+- The torrent resumes and reannounces.
+
+### BT Speed Display
+
+libtorrent exposes:
+
+- `download_rate`: includes metadata, DHT, handshakes, and protocol traffic.
+- `download_payload_rate`: real file payload speed.
+
+Downloader displays `download_payload_rate`, so metadata discovery traffic does not look like real file download speed.
+
+## File Naming
+
+HTTP incomplete:
 
 ```text
 filename.part-0.tmp
 filename.part-1.tmp
 filename.part-2.tmp
 filename.part-3.tmp
+```
+
+HTTP completed:
+
+```text
 filename
 ```
 
-BT：
+BT incomplete:
 
 ```text
 originalName.tmp
+```
+
+BT completed:
+
+```text
 originalName
 ```
 
-BT 完成後會透過 libtorrent `rename_file` 還原原本檔名。
+## Sandbox and Folder Access
 
-## Sandbox 與資料夾權限
+Location:
 
-macOS sandbox app 不能任意寫入使用者資料夾。
+```text
+Downloader/Persistence/FolderBookmarkStore.swift
+```
 
-當使用者按 `Choose Folder` 時，App 用 `NSOpenPanel` 讓使用者選資料夾，然後 `FolderBookmarkStore` 保存 security-scoped bookmark。
+macOS sandbox apps cannot freely write to arbitrary user folders. When the user chooses a folder with `NSOpenPanel`, Downloader stores a security-scoped bookmark.
 
-之後下載時，檔案操作都包在：
+Later file operations are wrapped with:
 
 ```swift
 FolderBookmarkStore.withAccess(to: folder) {
@@ -310,47 +317,63 @@ FolderBookmarkStore.withAccess(to: folder) {
 }
 ```
 
-這樣 App 才有權限在該資料夾建立和移動檔案。
+`startAccessingSecurityScopedResource()` and `stopAccessingSecurityScopedResource()` must be balanced. The code uses `defer` so access is released even if file operations throw an error.
 
-## UI 檔案解說
+Fallback folder:
 
-`ContentView.swift`
+```text
+~/Downloads
+```
 
-- 主畫面。
-- 建立 `NavigationSplitView`。
-- 左邊是 `SidebarView`。
-- 右邊是 `DownloadsListView`。
-- toolbar 提供新增、開始、暫停、刪除。
-- 負責彈出新增下載 sheet 和 BT 檔案選擇 sheet。
+## Persistence
 
-`DownloadsListView.swift`
+Location:
 
-- 使用 macOS `Table` 顯示任務。
-- 顯示名稱、進度、狀態、速度。
-- 根據 sidebar filter 篩選項目。
+```text
+Downloader/Persistence/DownloadStore.swift
+```
 
-`AddDownloadSheet.swift`
+Downloaded task state is stored here:
 
-- 輸入 URL 或 magnet link。
-- 選擇下載資料夾。
-- 儲存最後選擇的資料夾。
-- 呼叫 `downloadManager.add(...)`。
+```text
+~/Library/Application Support/Downloader/downloads.json
+```
 
-`TorrentFileSelectionSheet.swift`
+On app restart, old `.downloading` tasks are restored as `.paused`, because URLSession tasks and libtorrent handles from the previous process no longer exist.
 
-- 顯示 BT 檔案列表。
-- 支援全選、取消全選。
-- 用 checkbox 決定要下載哪些檔案。
+## Notifications
 
-## 常見 UI 代碼位置導覽
+Location:
 
-這一段是給初學者用的「地圖」。如果你想改某個按鈕、欄位或畫面，先看這裡，再去對應檔案搜尋關鍵字。
+```text
+Downloader/Notifications/NotificationManager.swift
+```
 
-### 主視窗入口
+When a download finishes:
 
-位置：`Downloader/App/DownloaderApp.swift`
+- `NSSound.beep()` plays a system sound.
+- A local notification is posted:
 
-這個檔案負責建立 App 主視窗：
+```text
+Download Complete
+<filename>
+```
+
+The app also implements notification delegate methods so foreground notifications can still show a banner and so clicking a notification brings the existing window forward.
+
+If macOS Focus / Do Not Disturb is enabled, the system may suppress banners or sounds. That is system behavior.
+
+## UI Code Guide
+
+### App Entry
+
+Location:
+
+```text
+Downloader/App/DownloaderApp.swift
+```
+
+Creates the main window:
 
 ```swift
 Window("Downloader", id: "main") {
@@ -360,204 +383,89 @@ Window("Downloader", id: "main") {
 }
 ```
 
-重點：
+Important points:
 
-- `Window("Downloader", id: "main")`：建立 macOS 視窗，標題是 `Downloader`。
-- `ContentView()`：主畫面從這裡開始。
-- `.environmentObject(downloadManager)`：把同一個 `DownloadManager` 傳給所有子畫面使用。
-- `.frame(minWidth:minHeight:)`：設定 App 視窗最小大小。
+- `@StateObject private var downloadManager`: one manager for the whole app.
+- `.environmentObject(downloadManager)`: passes it to child views.
+- `@Environment(\.scenePhase)`: detects active/inactive/background state.
+- `.commands`: adds menu commands and keyboard shortcuts.
 
-如果想改 App 最小視窗大小，就改 `.frame(minWidth: 980, minHeight: 620)`。
+### Main Screen and Toolbar
 
-### 上方工具列按鈕
+Location:
 
-位置：`Downloader/UI/ContentView.swift`
-
-搜尋關鍵字：`toolbar`
-
-工具列按鈕在這段：
-
-```swift
-.toolbar {
-    ToolbarItemGroup {
-        Button {
-            showingAddDownload = true
-        } label: {
-            Label("Add Download", systemImage: "plus")
-        }
-        .help("Add Download")
-    }
-}
+```text
+Downloader/UI/ContentView.swift
 ```
 
-一個 SwiftUI button 通常分兩部分：
+Toolbar buttons call:
 
 ```swift
-Button {
-    // 按下去後做甚麼
-} label: {
-    // 按鈕外觀顯示甚麼
-}
+downloadManager.resumeSelected()
+downloadManager.pauseSelected()
+downloadManager.deleteSelected()
+downloadManager.restoreSelectedFromTrash()
 ```
 
-例子：
-
-- `showingAddDownload = true`：打開新增下載視窗。
-- `downloadManager.resumeSelected()`：繼續目前選中的下載。
-- `downloadManager.pauseSelected()`：暫停目前選中的下載。
-- `downloadManager.deleteSelected()`：刪除目前選中的下載。
-- `.help("Resume")`：滑鼠停在按鈕上時顯示 tooltip。
-- `.disabled(...)`：條件成立時按鈕變灰，不能按。
-
-### 左側分類 Sidebar
-
-位置：`Downloader/UI/SidebarView.swift`
-
-搜尋關鍵字：`DownloadFilter`
-
-左邊 `All`、`Active`、`Paused`、`Completed`、`Trash` 是由 enum 定義：
+Tooltips use:
 
 ```swift
-enum DownloadFilter: String, CaseIterable, Identifiable {
-    case all = "All"
-    case active = "Active"
-    case paused = "Paused"
-    case completed = "Completed"
-    case trash = "Trash"
-}
+.help("Resume")
 ```
 
-如果想改左側分類名稱，例如把 `Trash` 改成其他文字，就改 `case trash = "Trash"`。
+### Sidebar
 
-每個分類的圖示在 `systemImage`：
+Location:
+
+```text
+Downloader/UI/SidebarView.swift
+```
+
+Categories are defined in `DownloadFilter`:
 
 ```swift
-case .trash: "trash"
+case all = "All"
+case active = "Active"
+case paused = "Paused"
+case completed = "Completed"
+case trash = "Trash"
 ```
 
-這裡使用的是 Apple SF Symbols 名稱。
+### Downloads Table
 
-### Table 和 Column
+Location:
 
-位置：`Downloader/UI/DownloadsListView.swift`
+```text
+Downloader/UI/DownloadsListView.swift
+```
 
-搜尋關鍵字：`TableColumn`
-
-下載列表是這段：
+Table columns:
 
 ```swift
-Table(items, selection: $downloadManager.selectedItemIDs) {
-    TableColumn("Name") { item in
-        ...
-    }
-
-    TableColumn("Progress") { item in
-        ...
-    }
-
-    TableColumn("Status") { item in
-        ...
-    }
-
-    TableColumn("Speed") { item in
-        ...
-    }
-}
+TableColumn("Name")
+TableColumn("Progress")
+TableColumn("Status")
+TableColumn("Speed")
 ```
 
-重點：
-
-- `Table(...)`：macOS 表格。
-- `items`：目前要顯示的下載項目。
-- `selection`：目前選中的項目。
-- `TableColumn("Name")`：建立一個欄位，欄位標題是 `Name`。
-- `{ item in ... }`：每一行都會拿到一個 `DownloadItem`，然後決定這一格顯示甚麼。
-
-目前有四個欄：
-
-| 欄位 | 代碼位置 | 顯示內容 |
-| --- | --- | --- |
-| Name | `TableColumn("Name")` | 檔名、來源 URL、HTTP/BT 圖示 |
-| Progress | `TableColumn("Progress")` | 進度條和百分比 |
-| Status | `TableColumn("Status")` | 下載狀態、錯誤、BT seeds/peers |
-| Speed | `TableColumn("Speed")` | 即時速度或平均速度 |
-
-### Table 欄位闊度
-
-位置：`Downloader/UI/DownloadsListView.swift`
-
-搜尋關鍵字：`.width`
-
-每個欄位後面都有 `.width(...)`：
+Column widths use:
 
 ```swift
 .width(min: 260, ideal: 420)
 ```
 
-意思：
+Meaning:
 
-- `min`：最小闊度，視窗很窄時盡量不要低過這個值。
-- `ideal`：理想闊度，空間足夠時 SwiftUI 會偏向這個闊度。
+- `min`: minimum width.
+- `ideal`: preferred width when there is enough room.
 
-例子：
+Current Status width:
 
 ```swift
-TableColumn("Status") { item in
-    Text(item.statusText)
-}
 .width(min: 146, ideal: 323)
 ```
 
-如果想讓 `Status` 欄更闊，就增加 `min` 或 `ideal`。
-
-目前 Table 也設定了總最小闊度：
-
-```swift
-private var minimumTableWidth: CGFloat { 605 }
-```
-
-這個數字應該接近各 column 最小闊度的總和。太大會令 Table 右側出現多餘空白；太小則可能令水平 scrollbar 太早或太遲出現。
-
-### Status 和 Speed 可能較長的文字
-
-調整 `Status` 和 `Speed` 欄寬時，可以用下面文字作參考。
-
-Status 可能較長的顯示文字：
-
-```text
-Downloading - seeds 123, peers 456, candidates 789（用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 322.7 pt）
-Finding metadata - peers 123, candidates 456
-Preparing selected files - seeds 123, peers 456, candidates 789
-Waiting for file selection
-Unable to create incomplete file
-single connection （用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 106.75 pt）
-Retrying connection 3/3
-Complete （用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 58.39 pt）
-Failed: <錯誤訊息>
-Not Available: <錯誤訊息>
-```
-
-注意：`Failed: <錯誤訊息>` 和 `Not Available: <錯誤訊息>` 後面的錯誤訊息沒有固定長度，實際可能超過欄位闊度。這類文字適合截斷，再用 tooltip 顯示完整內容。
-
-Speed 可能較長的顯示文字：
-
-```text
-Avg 999.9 MiB/s（用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 98.89 pt）
-Avg 1.0 GiB/s
-999.9 MiB/s
-1.0 GiB/s（用 macOS 系統字體約 13pt 量度，文字本身闊度大約是 52.45 pt）
--
-```
-
-Speed 文字由 `ByteCountFormatter` 產生，實際單位可能是 `KiB/s`、`MiB/s` 或 `GiB/s`。
-
-### 水平捲動條
-
-位置：`Downloader/UI/DownloadsListView.swift`
-
-搜尋關鍵字：`ScrollView(.horizontal)`
-
-Table 外面包了水平 `ScrollView`：
+The table is wrapped in a horizontal `ScrollView`:
 
 ```swift
 ScrollView(.horizontal) {
@@ -566,357 +474,204 @@ ScrollView(.horizontal) {
 }
 ```
 
-意思：
+If the window is too narrow, a horizontal scrollbar appears.
 
-- `ScrollView(.horizontal)`：內容太闊時，可以左右捲動。
-- `minimumTableWidth`：Table 最小總闊度。
-- `max(geometry.size.width, minimumTableWidth)`：Table 闊度取「目前畫面闊度」和「最小總闊度」中較大的那個。
+### Progress Column
 
-這樣做的目的：
-
-- 視窗夠闊時：Table 剛好填滿，不留右側空白。
-- 視窗太窄時：Table 保持最小闊度，底部出現水平 scrollbar。
-
-### 進度條和百分比
-
-位置：`Downloader/UI/DownloadsListView.swift`
-
-搜尋關鍵字：`ProgressView`
-
-進度條在 `Progress` column 裡：
+Progress UI:
 
 ```swift
-ProgressView(value: item.progress)
-```
+HStack(spacing: 1) {
+    ProgressView(value: item.progress)
+        .frame(minWidth: 64)
 
-百分比文字在旁邊：
-
-```swift
-Text(item.percentText)
-```
-
-`item.progress` 是 `0...1`：
-
-```text
-0.0 = 0%
-0.5 = 50%
-1.0 = 100%
-```
-
-百分比轉換在同一個檔案底部：
-
-```swift
-private extension DownloadItem {
-    var percentText: String {
-        let percentage = min(max(progress, 0), 1) * 100
-        return "\(Int(percentage.rounded()))%"
-    }
+    Text(item.percentText)
+        .frame(width: 35, alignment: .trailing)
 }
 ```
 
-### 右鍵選單
+`item.progress` is `0...1`.
 
-位置：`Downloader/UI/DownloadsListView.swift`
+`percentText` converts it to:
 
-搜尋關鍵字：`contextMenu`
+```text
+0%
+50%
+100%
+```
 
-右鍵選單在 `rowInteraction(...)` 裡：
+### Single Click, Multi-Select, Double Click
+
+Row behavior is centralized in:
+
+```text
+rowInteraction(for:downloadManager:focusTable:)
+```
+
+Behavior:
+
+- Normal click: select one item.
+- Command-click: keep native macOS multi-select.
+- Shift-click: keep native range selection.
+- Double-click: show in Finder.
+- Right-click: context menu.
+
+This guard prevents custom single-click logic from breaking native multi-select:
+
+```swift
+guard !NSEvent.modifierFlags.contains(.command),
+      !NSEvent.modifierFlags.contains(.shift) else {
+    return
+}
+```
+
+### Right-Click Menu
+
+Right-click menu uses:
 
 ```swift
 .contextMenu {
-    Button {
-        downloadManager.resumeSelected()
-    } label: {
-        Label("Resume", systemImage: "play.fill")
-    }
-
-    Button {
-        downloadManager.pauseSelected()
-    } label: {
-        Label("Pause", systemImage: "pause.fill")
-    }
-
-    Button(role: .destructive) {
-        downloadManager.deleteSelected()
-    } label: {
-        Label("Delete", systemImage: "trash")
-    }
+    Button { downloadManager.resumeSelected() } label: { ... }
+    Button { downloadManager.pauseSelected() } label: { ... }
+    Button { downloadManager.deleteSelected() } label: { ... }
 }
 ```
 
-重點：
-
-- `.contextMenu`：右鍵時彈出的選單。
-- `Button(role: .destructive)`：危險操作，例如刪除，系統會用比較警告的樣式。
-- `Label("Resume", systemImage: "play.fill")`：文字加圖示。
-- 右鍵前會呼叫 `downloadManager.selectForContextMenu(item)`。
-
-`selectForContextMenu(item)` 的目的：
-
-- 如果右鍵點中的項目已經在多選範圍內，就保留原本多選。
-- 如果右鍵點中的項目不在目前 selection 裡，才改成只選中這一項。
-
-這樣多選幾個下載項目後，右鍵其中一個再按 Delete / Pause / Resume，會操作整個多選範圍，而不是被右鍵那一下打散。
-
-### 單擊、雙擊和焦點
-
-位置：`Downloader/UI/DownloadsListView.swift`
-
-搜尋關鍵字：`rowInteraction`
-
-每一個 cell 都套用：
+Before actions, it calls:
 
 ```swift
-.rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+downloadManager.selectForContextMenu(item)
 ```
 
-這個 helper 集中處理：
+Meaning:
 
-- 單擊：選中該下載項目。
-- 雙擊：用 Finder 顯示下載位置。
-- 右鍵：顯示 context menu。
-- 焦點：讓 Table selection 變成藍色，而不是灰色。
+- If the right-clicked row is already selected, keep the full multi-selection.
+- If it is not selected, select only that row.
 
-相關代碼：
+### Add Download Sheet
 
-```swift
-.simultaneousGesture(
-    TapGesture(count: 1).onEnded {
-        focusTable()
-        guard !NSEvent.modifierFlags.contains(.command),
-              !NSEvent.modifierFlags.contains(.shift) else {
-            return
-        }
-        downloadManager.selectForSingleClick(item)
-    }
-)
-.onTapGesture(count: 2) {
-    focusTable()
-    downloadManager.showInFinder(item)
-}
+Location:
+
+```text
+Downloader/UI/AddDownloadSheet.swift
 ```
 
-這段 `guard` 很重要：
-
-- 普通單擊：由 `selectForSingleClick(item)` 選中一項。
-- `Command-click`：交回 macOS Table 原生多選。
-- `Shift-click`：交回 macOS Table 原生範圍選取。
-
-如果沒有這段判斷，自訂單擊手勢會把 Command / Shift 多選又改回單選。
-
-### 新增下載視窗
-
-位置：`Downloader/UI/AddDownloadSheet.swift`
-
-搜尋關鍵字：`AddDownloadSheet`
-
-這個檔案負責「新增下載」彈出視窗。
-
-常見代碼：
+Important UI:
 
 ```swift
 TextField("URL or magnet link", text: $urlText)
+Button("Add") { addDownload() }
+Button { chooseTorrentFile() } label: { ... }
+Button { chooseDestination() } label: { ... }
 ```
 
-這是輸入 URL / magnet 的文字框。
-
-```swift
-Button("Choose Folder") {
-    chooseFolder()
-}
-```
-
-這是選擇下載資料夾的按鈕。
-
-```swift
-Button("Add") {
-    addDownload()
-}
-```
-
-這是建立下載任務的按鈕。
-
-最後會呼叫：
+The final action calls:
 
 ```swift
 downloadManager.add(url: url, destination: destination)
 ```
 
-意思是：把 URL 和下載資料夾交給 `DownloadManager`，由它決定用 HTTP 還是 BT engine。
+### Torrent File Selection Sheet
 
-### BT 選擇檔案視窗
-
-位置：`Downloader/UI/TorrentFileSelectionSheet.swift`
-
-搜尋關鍵字：`TorrentFileSelectionSheet`
-
-這個檔案負責 BT 找到 metadata 後，讓使用者選 torrent 內要下載的檔案。
-
-常見按鈕：
-
-```swift
-Button("Select All") {
-    selectedIndexes = Set(selection.files.map(\.index))
-}
-```
-
-全選所有檔案。
-
-```swift
-Button("Deselect All") {
-    selectedIndexes.removeAll()
-}
-```
-
-取消全選。
-
-```swift
-Button("Start Selected Files") {
-    downloadManager.chooseTorrentFiles(itemID: selection.itemID, indexes: selectedIndexes)
-}
-```
-
-開始下載選中的 BT 檔案。
-
-### Settings 視窗
-
-位置：`Downloader/UI/SettingsView.swift`
-
-搜尋關鍵字：`SettingsView`
-
-這裡放 App 設定，例如速度限制：
-
-```swift
-Stepper("Speed limit: ...", value: $speedLimitKBps, in: 0...100_000, step: 100)
-```
-
-`Stepper` 是可以按加減的數值控制。
-
-### App menu 快捷鍵
-
-位置：`Downloader/App/DownloaderApp.swift`
-
-搜尋關鍵字：`commands`
-
-menu command 例如：
-
-```swift
-Button("Add Download...") {
-    NotificationCenter.default.post(name: .showAddDownload, object: nil)
-}
-.keyboardShortcut("n", modifiers: [.command])
-```
-
-意思：
-
-- menu 裡有 `Add Download...`
-- 快捷鍵是 `Command + N`
-- 按下後發出 `.showAddDownload` 通知，叫 `ContentView` 打開新增下載視窗。
-
-刪除快捷鍵：
-
-```swift
-Button("Delete Download") {
-    downloadManager.deleteSelected()
-}
-.keyboardShortcut(.delete, modifiers: [])
-```
-
-意思是按鍵盤 `Delete` 就刪除目前選中的下載項目。
-
-## 持久化
-
-`DownloadStore.swift`
-
-- 把 `DownloadItem` 陣列保存到：
+Location:
 
 ```text
-~/Library/Application Support/Downloader/downloads.json
+Downloader/UI/TorrentFileSelectionSheet.swift
 ```
 
-- App 重開時把舊的 `downloading` 任務改成 `paused`，避免顯示錯誤狀態。
-- 下載中進度不會每次 callback 都立即保存，而是由 `DownloadManager.scheduleSave()` 合併後再寫入。
-- App 變成 inactive/background，或 `ContentView` 消失時，會呼叫 `flushScheduledSave()` 立刻保存等待中的進度。
+It stores selected file indexes in:
 
-`FolderBookmarkStore.swift`
+```swift
+@State private var selectedIndexes: Set<Int>
+```
 
-- 保存最後選擇的下載資料夾。
-- 保存 security-scoped bookmark。
-- 提供 `withAccess` 包裝 sandbox 權限。
+The checkbox uses `Binding<Bool>` because each toggle needs true/false, while the app stores a set of selected file indexes.
 
-## 通知
+## Safari Extension and URL Scheme
 
-`NotificationManager.swift` 使用 `UserNotifications`。
-
-目前下載完成後會發送：
+Custom URL scheme parser:
 
 ```text
-Download Complete
-<檔案名稱>
+Downloader/BrowserIntegration/URLSchemeHandler.swift
 ```
 
-第一次使用時會請求通知權限。使用者拒絕通知不會影響下載。
-
-## Debug Area 常見訊息
-
-以下多數是 macOS / Xcode 系統 log，不一定是 App bug：
-
-| 訊息 | 說明 | 是否需要修 |
-| --- | --- | --- |
-| `DetachedSignatures` | macOS 簽章資料庫讀取 log | 通常不用 |
-| `Unable to obtain a task name port right` | debugger 或系統服務權限限制 | 通常不用 |
-| `nw_endpoint_flow_failed_with_error 127.0.0.1` | 本機 loopback 連線失敗 log | 只有下載失敗同時出現才查 |
-| `ViewBridge to RemoteViewService Terminated` | NSOpenPanel 等系統視窗關閉 | 通常不用 |
-
-## 下載測試 URL
-
-### httpbin
-
-可自訂位元組數的下載端點：
+Expected URL format:
 
 ```text
-https://httpbin.org/bytes/<bytes>
+downloader://add?url=https%3A%2F%2Fexample.com%2Ffile.zip
 ```
 
-可串流下載測試：
+`URLComponents` parses the query string, extracts `url`, and converts it back to `URL`.
 
-```text
-https://httpbin.org/stream-bytes/<bytes>
-```
-
-常用測試大小：
-
-| 大小 | 位元組 | 測試 URL |
-| --- | ---: | --- |
-| 1 KB | 1,024 B | `https://httpbin.org/bytes/1024` |
-| 1 MB | 1,048,576 B | `https://httpbin.org/bytes/1048576` |
-| 10 MB | 10,485,760 B | `https://httpbin.org/bytes/10485760` |
-| 100 MB | 104,857,600 B | `https://httpbin.org/bytes/104857600` |
-| 1 GB | 1,073,741,824 B | `https://httpbin.org/bytes/1073741824` |
-
-容量換算：
-
-```text
-1 KB = 1024 B
-1 MB = 1024 x 1024 = 1,048,576 B
-10 MB = 10 x 1024 x 1024 = 10,485,760 B
-100 MB = 100 x 1024 x 1024 = 104,857,600 B
-1 GB = 1024 x 1024 x 1024 = 1,073,741,824 B
-```
-
-### Hetzner
-
-網頁文件下載測試：
-
-[https://ash-speed.hetzner.com/](https://ash-speed.hetzner.com/)
-
-## Safari Extension 清理
-
-如果 Safari Extension 曾經出現同名、舊版本或冇用的 `Downloader Extension`，才需要清理 Xcode 產生的 DerivedData。平時不用經常刪除；Xcode 按 Run / Build 後會重新產生這些資料夾。
+Safari Extension development can leave stale extension builds in DerivedData. Clean only when Safari shows duplicate or old extensions:
 
 ```zsh
 rm -rf ~/Documents/Xcode/Downloader/Build/DerivedData
 rm -rf ~/Library/Developer/Xcode/DerivedData/Downloader-fkmjpusihrlgzaeuymdzbrsrgavk
 ```
 
-刪除後重新 Run / Build，Safari Extension 列表會較容易只留下目前 project 產生的版本。
+## Common Xcode Debug Area Messages
+
+Most of these are system logs, not app bugs.
+
+| Message | Meaning | Usually Fix? |
+| --- | --- | --- |
+| `DetachedSignatures` | macOS signature database lookup | No |
+| `Unable to obtain a task name port right` | debugger/system permission limitation | No |
+| `nw_endpoint_flow_failed_with_error 127.0.0.1` | local loopback connection log | Only investigate if downloads fail |
+| `ViewBridge to RemoteViewService Terminated` | system panel or remote view closed | No |
+| `NSXPCDecoder validateAllowedClass` | Apple framework secure coding warning | Usually no |
+| `Failed to send CA Event` | CoreAnalytics debug log | No |
+
+## Test URLs
+
+### Hetzner
+
+```text
+https://ash-speed.hetzner.com/
+https://ash-speed.hetzner.com/100MB.bin
+```
+
+### httpbin
+
+```text
+https://httpbin.org/bytes/<bytes>
+https://httpbin.org/stream-bytes/<bytes>
+```
+
+Common sizes:
+
+| Size | Bytes | URL |
+| --- | ---: | --- |
+| 1 KB | 1,024 | `https://httpbin.org/bytes/1024` |
+| 1 MB | 1,048,576 | `https://httpbin.org/bytes/1048576` |
+| 10 MB | 10,485,760 | `https://httpbin.org/bytes/10485760` |
+| 100 MB | 104,857,600 | `https://httpbin.org/bytes/104857600` |
+
+## Column Width Reference
+
+Long Status examples:
+
+```text
+Downloading - seeds 123, peers 456, candidates 789
+Finding metadata - peers 123, candidates 456
+Preparing selected files - seeds 123, peers 456, candidates 789
+Waiting for file selection
+Unable to create incomplete file
+Retrying connection 3/3
+Failed: <error message>
+Not Available: <error message>
+```
+
+Long Speed examples:
+
+```text
+Avg 999.9 MiB/s
+Avg 1.0 GiB/s
+999.9 MiB/s
+1.0 GiB/s
+-
+```
+
+Error messages can be longer than the column width, so Status text is truncated and the full text is available through tooltip/help.
+

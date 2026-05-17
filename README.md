@@ -1,0 +1,207 @@
+# Downloader
+
+Downloader is a macOS SwiftUI download manager inspired by Folx. It supports normal HTTP/HTTPS downloads, HTTP Range segmented downloads, magnet links, and `.torrent` imports with a bundled `libtorrent-rasterbar.xcframework`.
+
+## Features
+
+- HTTP/HTTPS downloads.
+- HTTP Range segmented downloads with 4 concurrent connections for supported large files.
+- Pause, resume, delete, trash, and restore download tasks.
+- Magnet and BT downloads through bundled libtorrent.
+- `.torrent` file import.
+- Torrent file selection after metadata is available.
+- Incomplete files are written directly to the selected download folder.
+- HTTP incomplete files use `.part-N.tmp`; BT incomplete files use `.tmp`.
+- Completed downloads show average download speed.
+- Double-click a completed item to reveal it in Finder.
+- Right-click actions: Resume, Pause, Show in Finder, Delete.
+- Download completion notification and system sound.
+- Safari Extension project included for browser integration experiments.
+
+## Requirements
+
+- macOS 14 or later.
+- Xcode 16 or later recommended.
+- Swift 6 project settings.
+- Apple Development signing team for running the main app and Safari extension.
+- App Groups capability configured as `group.com.sunnyyu.Downloader`.
+- Bundled libtorrent framework in `Vendor/Libtorrent/`.
+
+Users of the built app do not need to install `libtorrent-rasterbar` separately because it is embedded in the project.
+
+## Project Structure
+
+```text
+Downloader/
+  Downloader/                    Main macOS app source
+  Downloader Safari Extension/   Safari extension target
+  Vendor/Libtorrent/             Bundled libtorrent xcframework
+  Scripts/                       Helper scripts
+  README.md                      Quick project overview
+  TECHNICAL_DOCUMENTATION.md     Detailed architecture and code notes
+```
+
+Important source folders:
+
+```text
+Downloader/App/                  App entry and lifecycle
+Downloader/Core/                 DownloadItem and DownloadManager
+Downloader/HTTP/                 HTTP and segmented download engine
+Downloader/Torrent/              BT engine and libtorrent bridge
+Downloader/UI/                   SwiftUI views
+Downloader/Persistence/          JSON storage and folder bookmarks
+Downloader/Notifications/        Download-complete notifications
+Downloader/BrowserIntegration/   Custom URL scheme handling
+```
+
+## Build and Run
+
+1. Open `Downloader.xcodeproj` in Xcode.
+2. Select the `Downloader` scheme.
+3. Open the `Downloader` target settings.
+4. In `Signing & Capabilities`, choose your Team.
+5. Confirm App Groups contains:
+
+```text
+group.com.sunnyyu.Downloader
+```
+
+6. Repeat the same signing setup for `Downloader Safari Extension`.
+7. Run the app with `Product > Run`.
+
+## Usage
+
+### Add a Normal Download
+
+1. Click the plus button.
+2. Paste an HTTP/HTTPS URL.
+3. Choose a folder.
+4. Click Add.
+
+For example:
+
+```text
+https://ash-speed.hetzner.com/100MB.bin
+```
+
+### Add a Magnet Link
+
+1. Click the plus button.
+2. Paste a magnet link.
+3. Choose a folder.
+4. Click Add.
+5. Wait for metadata.
+6. Select torrent files when the selection window appears.
+
+### Import a `.torrent` File
+
+1. Click the plus button.
+2. Click `Choose .torrent File`.
+3. Select a `.torrent` file.
+4. Choose which files to download.
+
+### List Actions
+
+- Single-click: select one item.
+- Command-click: multi-select.
+- Shift-click: range-select.
+- Double-click: show downloaded location in Finder.
+- Right-click: Resume, Pause, Show in Finder, Delete.
+
+### Trash
+
+The Trash sidebar keeps deleted tasks temporarily.
+
+- Delete outside Trash: move selected tasks to Trash.
+- Restore inside Trash: move tasks back to their original list state.
+- Delete inside Trash: permanently remove tasks from the list.
+
+## HTTP Segmented Downloads
+
+Downloader starts normal HTTP downloads immediately with one connection. In the background, it probes whether the server supports HTTP Range requests.
+
+If the server supports Range and the file is large enough, Downloader upgrades the task to segmented downloading.
+
+Default HTTP segmented connections:
+
+```swift
+private static let segmentedThreadCount = 4
+```
+
+Location:
+
+```text
+Downloader/HTTP/HTTPDownloadEngine.swift
+```
+
+## Incomplete File Names
+
+HTTP:
+
+```text
+filename.part-0.tmp
+filename.part-1.tmp
+filename.part-2.tmp
+filename.part-3.tmp
+filename
+```
+
+BT:
+
+```text
+originalName.tmp
+originalName
+```
+
+Completed files are renamed back to their final names.
+
+## Safari Extension
+
+The project includes a Safari extension target. To test it during development:
+
+1. Build and run the app once from Xcode.
+2. Open Safari.
+3. Open `Safari > Settings > Extensions`.
+4. Enable the Downloader extension if it appears.
+
+If old duplicate extensions appear, clean Xcode DerivedData only when necessary:
+
+```zsh
+rm -rf ~/Documents/Xcode/Downloader/Build/DerivedData
+rm -rf ~/Library/Developer/Xcode/DerivedData/Downloader-fkmjpusihrlgzaeuymdzbrsrgavk
+```
+
+Then build again.
+
+## Test URLs
+
+Hetzner speed test:
+
+```text
+https://ash-speed.hetzner.com/
+https://ash-speed.hetzner.com/100MB.bin
+```
+
+httpbin byte downloads:
+
+```text
+https://httpbin.org/bytes/1024
+https://httpbin.org/bytes/1048576
+https://httpbin.org/bytes/10485760
+https://httpbin.org/bytes/104857600
+```
+
+httpbin streaming:
+
+```text
+https://httpbin.org/stream-bytes/1048576
+```
+
+## Documentation
+
+For architecture, code explanations, UI column notes, sandbox details, BT flow, and common Xcode Debug Area messages, see:
+
+```text
+TECHNICAL_DOCUMENTATION.md
+```
+
