@@ -1,4 +1,4 @@
-# Downloader
+# Downloader README
 
 Downloader is a macOS SwiftUI download manager inspired by Folx. It supports normal HTTP/HTTPS downloads, HTTP Range segmented downloads, magnet links, and `.torrent` imports with a bundled `libtorrent-rasterbar.xcframework`.
 
