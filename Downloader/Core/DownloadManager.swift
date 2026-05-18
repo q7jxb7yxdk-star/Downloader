@@ -16,6 +16,9 @@ final class DownloadManager: NSObject, ObservableObject {
     /// `Table` 綁定 `Set<ID>` 時，macOS 就能用 Command-click / Shift-click 多選。
     @Published var selectedItemIDs: Set<DownloadItem.ID> = []
 
+    // Shift-click 範圍選取的起點。普通 click 或 Command-click 都會更新它。
+    private var selectionAnchorID: DownloadItem.ID?
+
     /// BT 找到 metadata 後用來彈出「選擇檔案」sheet。
     @Published var torrentFileSelection: TorrentFileSelection?
 
@@ -65,13 +68,44 @@ final class DownloadManager: NSObject, ObservableObject {
         }
     }
 
-    /// Table cell 被單擊時選中該任務。
+    /// Table row 被點擊時整理 selection。
     ///
-    /// 這個方法集中處理 selection，避免 UI 每個 cell 直接改狀態時，
-    /// 和 Trash / All 分頁切換後的過期 selection 打架。
-    func selectForSingleClick(_ item: DownloadItem) {
-        guard items.contains(where: { $0.id == item.id }) else { return }
+    /// 因為 row 上有右鍵、雙擊、tooltip 等互動，SwiftUI `Table` 原生 selection
+    /// 有時會被 cell gesture 擋住，所以這裡自己實作 macOS 常見選取行為。
+    func selectForRowClick(_ item: DownloadItem, visibleIDs: [DownloadItem.ID]) {
+        guard visibleIDs.contains(item.id) else { return }
+
+        let modifiers = NSEvent.modifierFlags
+        let isCommandClick = modifiers.contains(.command)
+        let isShiftClick = modifiers.contains(.shift)
+
+        if isShiftClick,
+           let anchorID = selectionAnchorID,
+           let anchorIndex = visibleIDs.firstIndex(of: anchorID),
+           let clickedIndex = visibleIDs.firstIndex(of: item.id) {
+            let bounds = min(anchorIndex, clickedIndex)...max(anchorIndex, clickedIndex)
+            let rangeIDs = Set(visibleIDs[bounds])
+
+            if isCommandClick {
+                selectedItemIDs.formUnion(rangeIDs)
+            } else {
+                selectedItemIDs = rangeIDs
+            }
+            return
+        }
+
+        if isCommandClick {
+            if selectedItemIDs.contains(item.id) {
+                selectedItemIDs.remove(item.id)
+            } else {
+                selectedItemIDs.insert(item.id)
+            }
+            selectionAnchorID = item.id
+            return
+        }
+
         selectedItemIDs = [item.id]
+        selectionAnchorID = item.id
     }
 
     /// 右鍵選單打開前整理 selection。
@@ -183,7 +217,11 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 使用者在 BT 檔案選擇 sheet 按下開始後呼叫。
     func chooseTorrentFiles(itemID: DownloadItem.ID, indexes: Set<Int>) {
         guard let index = items.firstIndex(where: { $0.id == itemID }), items[index].kind == .torrent else { return }
+        let selectedPaths = torrentFileSelection?.itemID == itemID
+            ? torrentFileSelection?.files.filter { indexes.contains($0.index) }.map(\.path) ?? []
+            : []
         items[index].selectedTorrentFileIndexes = indexes
+        items[index].selectedTorrentFilePaths = selectedPaths
         torrentFileSelection = nil
         torrentEngine.selectFiles(for: itemID, indexes: indexes)
         mark(id: itemID, status: .queued)
@@ -268,7 +306,18 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 完成的任務優先選中實際檔案；如果檔案不存在，就打開下載資料夾。
     func showInFinder(_ item: DownloadItem) {
         guard let url = finderURL(for: item) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+
+        var isDirectory: ObjCBool = false
+        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+
+        if isDirectory.boolValue {
+            openFolderInFinder(url, maximizeWindow: item.kind == .torrent)
+        } else {
+            NSWorkspace.shared.selectFile(
+                url.path(percentEncoded: false),
+                inFileViewerRootedAtPath: url.deletingLastPathComponent().path(percentEncoded: false)
+            )
+        }
     }
 
     /// Engine 回報失敗。
@@ -327,9 +376,68 @@ final class DownloadManager: NSObject, ObservableObject {
         items.filter { selectedItemIDs.contains($0.id) }
     }
 
+    /// 打開 Finder 資料夾。
+    ///
+    /// `NSWorkspace.shared.open` 只能打開資料夾，不能控制 Finder 視窗大小。
+    /// BT 資料夾通常內容較多，所以這裡可以在打開後透過 Apple Events
+    /// 把 Finder 最前面的視窗拉到螢幕可用範圍。
+    private func openFolderInFinder(_ url: URL, maximizeWindow: Bool) {
+        NSWorkspace.shared.open(url)
+        guard maximizeWindow else { return }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            maximizeFrontFinderWindow()
+        }
+    }
+
+    /// 用 AppleScript 調整 Finder 最前面的視窗大小。
+    ///
+    /// macOS 會保護其他 App，所以第一次使用時可能會要求允許 Downloader 控制 Finder。
+    /// 如果使用者拒絕授權，資料夾仍會正常打開，只是不會自動放大。
+    private func maximizeFrontFinderWindow() {
+        guard let screen = NSScreen.main else { return }
+        let screenFrame = screen.frame
+        let visibleFrame = screen.visibleFrame
+
+        let left = Int(visibleFrame.minX)
+        let top = Int(screenFrame.maxY - visibleFrame.maxY)
+        let right = Int(visibleFrame.maxX)
+        let bottom = Int(screenFrame.maxY - visibleFrame.minY)
+
+        let source = """
+        tell application "Finder"
+            activate
+            try
+                set bounds of front window to {\(left), \(top), \(right), \(bottom)}
+            end try
+        end tell
+        """
+
+        var error: NSDictionary?
+        NSAppleScript(source: source)?.executeAndReturnError(&error)
+    }
+
     /// 找出 Finder 應該顯示的位置。
     private func finderURL(for item: DownloadItem) -> URL? {
         let fileManager = FileManager.default
+
+        // BT 任務要先處理，避免 item.name 是 `.torrent` 檔名時誤選 torrent 檔，
+        // 也避免完成後 localFileURL 是總下載資料夾時直接停在 Downloads。
+        if item.kind == .torrent {
+            if let destination = item.destination, fileManager.fileExists(atPath: destination.path) {
+                return torrentContentFolder(for: item, destination: destination) ?? destination
+            }
+
+            if let localFileURL = item.localFileURL, fileManager.fileExists(atPath: localFileURL.path) {
+                var isDirectory: ObjCBool = false
+                fileManager.fileExists(atPath: localFileURL.path, isDirectory: &isDirectory)
+                if isDirectory.boolValue {
+                    return torrentContentFolder(for: item, destination: localFileURL) ?? localFileURL
+                }
+                return localFileURL.deletingLastPathComponent()
+            }
+        }
 
         if let localFileURL = item.localFileURL {
             if fileManager.fileExists(atPath: localFileURL.path) {
@@ -341,17 +449,40 @@ final class DownloadManager: NSObject, ObservableObject {
             }
         }
 
-        if let destination = item.destination {
+        if let destination = item.destination, fileManager.fileExists(atPath: destination.path) {
             let guessedFileURL = destination.appending(path: item.name)
             if fileManager.fileExists(atPath: guessedFileURL.path) {
                 return guessedFileURL
             }
-            if fileManager.fileExists(atPath: destination.path) {
-                return destination
-            }
+            return destination
         }
 
         return nil
+    }
+
+    /// 找出 BT 內容檔案所在的資料夾。
+    ///
+    /// torrent 內部路徑可能是 `Movie/Movie.mkv` 或單一檔案 `Movie.mkv`：
+    /// - 多層路徑：打開第一個選中檔案的上一層資料夾。
+    /// - 單一檔案在根目錄：打開使用者選擇的下載資料夾。
+    private func torrentContentFolder(for item: DownloadItem, destination: URL) -> URL? {
+        guard let firstPath = item.selectedTorrentFilePaths.sorted().first, !firstPath.isEmpty else {
+            return destination
+        }
+
+        let contentURL = destination.appending(path: firstPath)
+        let folderURL = contentURL.deletingLastPathComponent()
+
+        if FileManager.default.fileExists(atPath: folderURL.path) {
+            return folderURL
+        }
+
+        let temporaryFolderURL = destination.appending(path: firstPath + ".tmp").deletingLastPathComponent()
+        if FileManager.default.fileExists(atPath: temporaryFolderURL.path) {
+            return temporaryFolderURL
+        }
+
+        return destination
     }
 
     /// 從 URL 產生列表上顯示的檔名。

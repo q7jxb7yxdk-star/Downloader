@@ -70,6 +70,8 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var averageBytesPerSecond: Int64 = 0
     /// BT 使用：保存使用者選中的 torrent file indexes，方便 App 重開後繼續。
     var selectedTorrentFileIndexes: Set<Int> = []
+    /// BT 使用：保存使用者選中的 torrent 內部路徑，雙擊時可打開內容檔案所在資料夾。
+    var selectedTorrentFilePaths: [String] = []
     /// 軟刪除標記。true 代表顯示在 Trash，而不是立刻從 JSON 移除。
     var isTrashed = false
     /// 從 Trash 還原時用來回復原本狀態。
@@ -93,6 +95,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         case bytesPerSecond
         case averageBytesPerSecond
         case selectedTorrentFileIndexes
+        case selectedTorrentFilePaths
         case isTrashed
         case statusBeforeTrash
         case errorMessage
@@ -114,6 +117,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         bytesPerSecond: Int64 = 0,
         averageBytesPerSecond: Int64 = 0,
         selectedTorrentFileIndexes: Set<Int> = [],
+        selectedTorrentFilePaths: [String] = [],
         isTrashed: Bool = false,
         statusBeforeTrash: DownloadStatus? = nil,
         errorMessage: String? = nil,
@@ -132,6 +136,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         self.bytesPerSecond = bytesPerSecond
         self.averageBytesPerSecond = averageBytesPerSecond
         self.selectedTorrentFileIndexes = selectedTorrentFileIndexes
+        self.selectedTorrentFilePaths = selectedTorrentFilePaths
         self.isTrashed = isTrashed
         self.statusBeforeTrash = statusBeforeTrash
         self.errorMessage = errorMessage
@@ -156,6 +161,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         bytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .bytesPerSecond) ?? 0
         averageBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .averageBytesPerSecond) ?? 0
         selectedTorrentFileIndexes = try container.decodeIfPresent(Set<Int>.self, forKey: .selectedTorrentFileIndexes) ?? []
+        selectedTorrentFilePaths = try container.decodeIfPresent([String].self, forKey: .selectedTorrentFilePaths) ?? []
         isTrashed = try container.decodeIfPresent(Bool.self, forKey: .isTrashed) ?? false
         statusBeforeTrash = try container.decodeIfPresent(DownloadStatus.self, forKey: .statusBeforeTrash)
         errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)

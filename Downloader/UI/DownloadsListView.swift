@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// 右側下載列表。
@@ -36,7 +37,7 @@ struct DownloadsListView: View {
                                 AdaptiveTooltipText(item.source.absoluteString, font: .caption, color: .secondary)
                             }
                         }
-                        .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+                        .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
                     .width(min: 260, ideal: 420)
 
@@ -52,7 +53,7 @@ struct DownloadsListView: View {
                                 .monospacedDigit()
                                 .frame(width: 35, alignment: .trailing)
                         }
-                            .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+                            .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
                     .width(min: 100, ideal: 110)
 
@@ -61,7 +62,7 @@ struct DownloadsListView: View {
                             .foregroundStyle(item.status.color)
                             .lineLimit(1)
                             .help(item.statusText)
-                            .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+                            .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
                     .width(min: 146, ideal: 323)
 
@@ -69,7 +70,7 @@ struct DownloadsListView: View {
                         // monospacedDigit 讓速度數字跳動時欄位比較穩定。
                         Text(item.speedText)
                             .monospacedDigit()
-                            .rowInteraction(for: item, downloadManager: downloadManager, focusTable: focusTable)
+                            .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
                     .width(min: 53, ideal: 99)
                 }
@@ -184,8 +185,13 @@ private extension View {
     ///
     /// SwiftUI `Table` 目前沒有直接掛在整條 row 的 context menu API，
     /// 所以把相同行為套到每個 cell，使用時就像整條 row 都可以右鍵。
+    ///
+    /// 這裡用自訂單擊 selection，是因為 cell 同時有右鍵、雙擊、tooltip 等互動，
+    /// 原生 Table selection 在這種組合下可能收不到 click。
+    /// 真正的 Command-click / Shift-click 規則集中在 DownloadManager。
     func rowInteraction(
         for item: DownloadItem,
+        visibleIDs: [DownloadItem.ID],
         downloadManager: DownloadManager,
         focusTable: @escaping () -> Void
     ) -> some View {
@@ -193,21 +199,17 @@ private extension View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .simultaneousGesture(
-                TapGesture(count: 1).onEnded {
+                DragGesture(minimumDistance: 0).onEnded { _ in
                     focusTable()
-                    // Command-click / Shift-click 是 macOS Table 內建多選手勢。
-                    // 如果這裡也改 selection，會把原生多選又變回單選。
-                    guard !NSEvent.modifierFlags.contains(.command),
-                          !NSEvent.modifierFlags.contains(.shift) else {
+
+                    if NSApp.currentEvent?.clickCount ?? 1 >= 2 {
+                        downloadManager.showInFinder(item)
                         return
                     }
-                    downloadManager.selectForSingleClick(item)
+
+                    downloadManager.selectForRowClick(item, visibleIDs: visibleIDs)
                 }
             )
-            .onTapGesture(count: 2) {
-                focusTable()
-                downloadManager.showInFinder(item)
-            }
             .contextMenu {
                 if !item.isTrashed {
                     Button {
