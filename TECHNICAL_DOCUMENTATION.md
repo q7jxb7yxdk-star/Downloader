@@ -77,7 +77,7 @@ It handles:
 - `@Published var items`: the list displayed by SwiftUI.
 - `selectedItemIDs`: current table selection.
 - Adding new tasks.
-- Pause / resume / delete / restore.
+- Pause / resume / delete / delete with files / restore.
 - Routing tasks to HTTP or BT engines.
 - Receiving engine progress callbacks.
 - Completing tasks and calculating average speed.
@@ -118,6 +118,31 @@ func flushScheduledSave()
 `scheduleSave()` waits about 750ms before writing JSON. Continuous progress updates cancel and reschedule the pending save.
 
 `flushScheduledSave()` forces a save when the app becomes inactive/background or the main view disappears, so the last bit of progress is not lost when quitting.
+
+### Delete with Files
+
+`deleteSelectedWithFiles()` removes selected tasks from the list and moves related local files to macOS Trash.
+
+The file candidates are inferred from the task type:
+
+- HTTP: the completed file, `folder/item.name`, and matching `item.name.part-N.tmp` files.
+- BT: selected torrent file paths, matching `.tmp` files, and the local output URL when available.
+
+Before moving files, Downloader pauses the active engine while preserving incomplete files. After files are moved to Trash successfully, it cancels the engine state and removes the task from the list.
+
+The trash operation prefers Finder automation:
+
+```swift
+delete POSIX file "<path>"
+```
+
+This is closest to a normal Finder trash action. If Finder automation fails, Downloader falls back to:
+
+```swift
+NSWorkspace.shared.recycle(...)
+```
+
+Because the file move is asynchronous, folder access uses the async `FolderBookmarkStore.withAccess(to:)` overload so security-scoped access remains active until the operation finishes.
 
 ## HTTP Download Flow
 
@@ -444,6 +469,7 @@ Table columns:
 ```swift
 TableColumn("Name")
 TableColumn("Progress")
+TableColumn("File Size")
 TableColumn("Status")
 TableColumn("Speed")
 ```
@@ -464,6 +490,18 @@ Current Status width:
 ```swift
 .width(min: 146, ideal: 323)
 ```
+
+Current File Size width:
+
+```swift
+.width(min: 15, ideal: 20)
+```
+
+`File Size` is displayed by `DownloadItem.fileSizeText`:
+
+- `bytesExpected > 0`: total expected size.
+- `bytesReceived > 0`: currently downloaded size when total size is not known yet.
+- Otherwise: `-`.
 
 The table is wrapped in a horizontal `ScrollView`:
 
@@ -516,14 +554,9 @@ Behavior:
 - Double-click: show in Finder.
 - Right-click: context menu.
 
-This guard prevents custom single-click logic from breaking native multi-select:
+Selection rules are implemented in `DownloadManager.selectForRowClick(_:visibleIDs:)`, which reads current modifier flags and applies normal, Command-click, and Shift-click selection behavior.
 
-```swift
-guard !NSEvent.modifierFlags.contains(.command),
-      !NSEvent.modifierFlags.contains(.shift) else {
-    return
-}
-```
+The table is focusable so selected rows use the active selection color. The visible focus ring is disabled with `.focusEffectDisabled()` to avoid the blue focus outline around the table.
 
 ### Right-Click Menu
 
@@ -534,6 +567,7 @@ Right-click menu uses:
     Button { downloadManager.resumeSelected() } label: { ... }
     Button { downloadManager.pauseSelected() } label: { ... }
     Button { downloadManager.deleteSelected() } label: { ... }
+    Button { downloadManager.deleteSelectedWithFiles() } label: { ... }
 }
 ```
 
@@ -674,4 +708,3 @@ Avg 1.0 GiB/s
 ```
 
 Error messages can be longer than the column width, so Status text is truncated and the full text is available through tooltip/help.
-

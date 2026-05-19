@@ -14,7 +14,8 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - HTTP incomplete files use `.part-N.tmp`; BT incomplete files use `.tmp`.
 - Completed downloads show average download speed.
 - Double-click a completed item to reveal it in Finder.
-- Right-click actions: Resume, Pause, Show in Finder, Delete.
+- Downloads table shows progress, file size, status, and speed.
+- Right-click actions: Resume, Pause, Show in Finder, Delete, Delete with Files.
 - Download completion notification and system sound.
 - Safari Extension project included for browser integration experiments.
 
@@ -106,7 +107,7 @@ https://ash-speed.hetzner.com/100MB.bin
 - Command-click: multi-select.
 - Shift-click: range-select.
 - Double-click: show downloaded location in Finder.
-- Right-click: Resume, Pause, Show in Finder, Delete.
+- Right-click: Resume, Pause, Show in Finder, Delete, Delete with Files.
 
 ### Trash
 
@@ -115,6 +116,12 @@ The Trash sidebar keeps deleted tasks temporarily.
 - Delete outside Trash: move selected tasks to Trash.
 - Restore inside Trash: move tasks back to their original list state.
 - Delete inside Trash: permanently remove tasks from the list.
+
+### Delete with Files
+
+`Delete with Files` removes selected tasks from the list and moves their local files, folders, or incomplete temporary files to the macOS Trash.
+
+Downloader first asks Finder to move the files to Trash, so macOS may ask for permission to control Finder. If Finder automation is not available, Downloader falls back to the system workspace trash API.
 
 ## HTTP Segmented Downloads
 
@@ -204,4 +211,3 @@ For architecture, code explanations, UI column notes, sandbox details, BT flow, 
 ```text
 TECHNICAL_DOCUMENTATION.md
 ```
-
