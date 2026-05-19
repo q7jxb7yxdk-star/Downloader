@@ -57,6 +57,15 @@ struct DownloadsListView: View {
                     }
                     .width(min: 100, ideal: 110)
 
+                    TableColumn("File Size") { item in
+                        Text(item.fileSizeText)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .help(item.fileSizeText)
+                            .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
+                    }
+                    .width(min: 15, ideal: 20)
+
                     TableColumn("Status") { item in
                         Text(item.statusText)
                             .foregroundStyle(item.status.color)
@@ -77,6 +86,7 @@ struct DownloadsListView: View {
                 .frame(width: max(geometry.size.width, minimumTableWidth))
                 .focusable()
                 .focused($tableIsFocused)
+                .focusEffectDisabled()
             }
         }
         .overlay {
@@ -112,7 +122,7 @@ struct DownloadsListView: View {
     ///
     /// 視窗少於這個寬度時使用水平 scrollbar；大於這個寬度時只填滿視窗，
     /// 不額外製造右側空白。
-    private var minimumTableWidth: CGFloat { 605 }
+    private var minimumTableWidth: CGFloat { 700 }
 
     /// 讓列表重新取得鍵盤焦點，selection 才會用藍色顯示。
     private func focusTable() {

@@ -182,6 +182,22 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         }
     }
 
+    /// 列表中顯示的檔案大小。
+    ///
+    /// `bytesExpected` 是伺服器或 torrent metadata 提供的總大小；
+    /// 如果暫時未知，就退而顯示目前已下載大小。
+    var fileSizeText: String {
+        if bytesExpected > 0 {
+            return ByteCountFormatter.string(fromByteCount: bytesExpected, countStyle: .binary)
+        }
+
+        if bytesReceived > 0 {
+            return ByteCountFormatter.string(fromByteCount: bytesReceived, countStyle: .binary)
+        }
+
+        return "-"
+    }
+
     /// 列表中顯示的狀態文字。
     ///
     /// `errorMessage` 在這個 App 也用來放補充狀態，例如 BT 的 peer/seed 資訊。
