@@ -76,4 +76,16 @@ enum FolderBookmarkStore {
         }
         return try work()
     }
+
+    /// 非同步檔案操作版本，讓 security-scoped access 可以覆蓋整個 async 工作。
+    @MainActor
+    static func withAccess<T>(to folder: URL, perform work: () async throws -> T) async rethrows -> T {
+        let didStartAccessing = folder.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                folder.stopAccessingSecurityScopedResource()
+            }
+        }
+        return try await work()
+    }
 }

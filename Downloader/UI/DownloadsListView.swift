@@ -250,6 +250,14 @@ private extension View {
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+
+                Button(role: .destructive) {
+                    // 直接移除列表項目，並把已下載/未完成的檔案移到 macOS Trash。
+                    downloadManager.selectForContextMenu(item)
+                    downloadManager.deleteSelectedWithFiles()
+                } label: {
+                    Label("Delete with Files", systemImage: "trash.slash")
+                }
             }
     }
 }

@@ -34,6 +34,6 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Downloader uses Apple Events to resize Finder windows after opening downloaded torrent folders.</string>
+	<string>Downloader uses Apple Events to move downloaded files to Trash with Finder and to resize Finder windows after opening downloaded torrent folders.</string>
 </dict>
 </plist>

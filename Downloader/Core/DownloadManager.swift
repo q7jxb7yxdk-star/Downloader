@@ -193,6 +193,50 @@ final class DownloadManager: NSObject, ObservableObject {
         store.save(items)
     }
 
+    /// 刪除目前選中的任務，並把相關本機檔案移到 macOS Trash。
+    ///
+    /// 與普通 Delete 不同，這個動作不會先移到 App 內的 Trash 分類；
+    /// 成功刪除檔案後會直接從列表移除項目。
+    func deleteSelectedWithFiles() {
+        let itemsToDelete = selectedItems
+        guard !itemsToDelete.isEmpty else { return }
+        guard confirmDeleteWithFiles(count: itemsToDelete.count) else { return }
+
+        Task { @MainActor in
+            await deleteItemsWithFiles(itemsToDelete)
+        }
+    }
+
+    private func deleteItemsWithFiles(_ itemsToDelete: [DownloadItem]) async {
+        var failedIDs: Set<DownloadItem.ID> = []
+
+        for item in itemsToDelete {
+            pauseDownloadPreservingFiles(for: item)
+
+            do {
+                try await moveDownloadedFilesToTrash(for: item)
+                cancelDownload(for: item)
+            } catch {
+                failedIDs.insert(item.id)
+                if let index = items.firstIndex(where: { $0.id == item.id }) {
+                    items[index].status = .failed
+                    items[index].bytesPerSecond = 0
+                    items[index].errorMessage = "Unable to delete files: \(error.localizedDescription)"
+                }
+            }
+        }
+
+        let deletedIDs = Set(itemsToDelete.map(\.id)).subtracting(failedIDs)
+        items.removeAll { deletedIDs.contains($0.id) }
+        selectedItemIDs.subtract(deletedIDs)
+
+        if selectedItemIDs.isEmpty {
+            selectedItemIDs = Set(items.prefix(1).map(\.id))
+        }
+
+        store.save(items)
+    }
+
     /// 真正刪除 Trash 內的項目。
     ///
     /// 只有 item 已經在 Trash 時才會走到這裡；正常列表的 Delete 仍然只是軟刪除。
@@ -201,12 +245,7 @@ final class DownloadManager: NSObject, ObservableObject {
         guard !ids.isEmpty else { return }
 
         for item in items where ids.contains(item.id) {
-            switch item.kind {
-            case .http:
-                httpEngine.cancel(id: item.id)
-            case .torrent:
-                torrentEngine.cancel(id: item.id)
-            }
+            cancelDownload(for: item)
         }
 
         items.removeAll { ids.contains($0.id) }
@@ -369,6 +408,204 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].errorMessage = nil
         items[index].bytesPerSecond = 0
         store.save(items)
+    }
+
+    /// 停止 engine 內正在跑的下載並清理 engine 狀態。
+    private func cancelDownload(for item: DownloadItem) {
+        switch item.kind {
+        case .http:
+            httpEngine.cancel(id: item.id)
+        case .torrent:
+            torrentEngine.cancel(id: item.id)
+        }
+    }
+
+    /// 停止網路活動但保留已寫入的未完成檔，讓 Delete with Files 可以把它們移到 Trash。
+    private func pauseDownloadPreservingFiles(for item: DownloadItem) {
+        switch item.kind {
+        case .http:
+            httpEngine.pause(id: item.id)
+        case .torrent:
+            torrentEngine.pause(id: item.id)
+        }
+    }
+
+    /// 讓使用者確認會連同本機檔案一起刪除。
+    private func confirmDeleteWithFiles(count: Int) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = count == 1 ? "Delete Download with Files?" : "Delete Downloads with Files?"
+        alert.informativeText = count == 1
+            ? "The selected download will be removed from the list, and its local file or folder will be moved to the macOS Trash."
+            : "\(count) selected downloads will be removed from the list, and their local files or folders will be moved to the macOS Trash."
+        alert.addButton(withTitle: "Delete with Files")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    /// 把這個 item 可推斷出的下載檔案、資料夾或暫存檔移到 macOS Trash。
+    private func moveDownloadedFilesToTrash(for item: DownloadItem) async throws {
+        let folder = item.destination ?? item.localFileURL?.deletingLastPathComponent() ?? FolderBookmarkStore.fallbackFolder
+
+        try await FolderBookmarkStore.withAccess(to: folder) {
+            let candidates = fileDeletionCandidates(for: item, in: folder)
+            try await trashExistingItems(candidates)
+
+            if item.kind == .torrent {
+                try await removeEmptyTorrentFolders(for: item, in: folder)
+            }
+        }
+    }
+
+    /// 建立要刪除的檔案候選清單。不存在的路徑之後會被忽略。
+    private func fileDeletionCandidates(for item: DownloadItem, in folder: URL) -> [URL] {
+        switch item.kind {
+        case .http:
+            return httpFileDeletionCandidates(for: item, in: folder)
+        case .torrent:
+            return torrentFileDeletionCandidates(for: item, in: folder)
+        }
+    }
+
+    /// HTTP 下載包含正式檔名和 `.part-N.tmp` 暫存檔。
+    private func httpFileDeletionCandidates(for item: DownloadItem, in folder: URL) -> [URL] {
+        var candidates: [URL] = []
+
+        if let localFileURL = item.localFileURL {
+            candidates.append(localFileURL)
+        }
+
+        candidates.append(folder.appending(path: item.name))
+
+        let fileManager = FileManager.default
+        let partPrefix = "\(item.name).part-"
+        if let contents = try? fileManager.contentsOfDirectory(
+            at: folder,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) {
+            candidates.append(contentsOf: contents.filter { url in
+                let filename = url.lastPathComponent
+                return filename.hasPrefix(partPrefix) && filename.hasSuffix(".tmp")
+            })
+        }
+
+        return candidates
+    }
+
+    /// BT 下載優先刪除使用者選中的 torrent 內部檔案，以及 incomplete `.tmp` 檔。
+    private func torrentFileDeletionCandidates(for item: DownloadItem, in folder: URL) -> [URL] {
+        var candidates: [URL] = []
+
+        for path in item.selectedTorrentFilePaths where !path.isEmpty {
+            let fileURL = folder.appending(path: path)
+            candidates.append(fileURL)
+            candidates.append(folder.appending(path: path + ".tmp"))
+        }
+
+        if let localFileURL = item.localFileURL, localFileURL != folder {
+            candidates.append(localFileURL)
+        }
+
+        return candidates
+    }
+
+    /// 將存在的候選路徑移到 macOS Trash，同一路徑只處理一次。
+    private func trashExistingItems(_ candidates: [URL]) async throws {
+        let fileManager = FileManager.default
+        var seenPaths: Set<String> = []
+        var urlsToTrash: [URL] = []
+
+        for url in candidates {
+            let path = url.standardizedFileURL.path
+            guard seenPaths.insert(path).inserted else { continue }
+            guard fileManager.fileExists(atPath: path) else { continue }
+            urlsToTrash.append(url)
+        }
+
+        guard !urlsToTrash.isEmpty else { return }
+
+        do {
+            try trashItemsUsingFinder(urlsToTrash)
+        } catch {
+            // 如果使用者尚未允許 Apple Events 控制 Finder，仍然用系統 API 完成刪除。
+            try await recycleItemsUsingWorkspace(urlsToTrash)
+        }
+    }
+
+    /// 讓 Finder 執行刪除，這是最接近 Finder 自己「移到垃圾桶」的方式，
+    /// 也最有機會在垃圾桶右鍵選單保留「放回原處 / Put Back」。
+    private func trashItemsUsingFinder(_ urls: [URL]) throws {
+        let commands = urls.map { url in
+            "delete POSIX file \"\(appleScriptEscaped(url.path(percentEncoded: false)))\""
+        }.joined(separator: "\n")
+
+        let source = """
+        tell application "Finder"
+        \(commands)
+        end tell
+        """
+
+        var scriptError: NSDictionary?
+        guard NSAppleScript(source: source)?.executeAndReturnError(&scriptError) != nil else {
+            let message = scriptError?[NSAppleScript.errorMessage] as? String ?? "Finder could not move the item to Trash."
+            throw NSError(domain: "Downloader.FinderTrash", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+        }
+    }
+
+    private func appleScriptEscaped(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    /// Finder Apple Events 不可用時的 fallback。
+    private func recycleItemsUsingWorkspace(_ urlsToRecycle: [URL]) async throws {
+        let expectedRecycleCount = urlsToRecycle.count
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            NSWorkspace.shared.recycle(urlsToRecycle) { recycledURLs, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                if recycledURLs.count != expectedRecycleCount {
+                    continuation.resume(throwing: CocoaError(.fileWriteUnknown))
+                    return
+                }
+
+                continuation.resume()
+            }
+        }
+    }
+
+    /// BT 選中檔案刪除後，順手清掉空的父資料夾，但絕不刪使用者選的下載根目錄。
+    private func removeEmptyTorrentFolders(for item: DownloadItem, in folder: URL) async throws {
+        let fileManager = FileManager.default
+        let rootPath = folder.standardizedFileURL.path
+        var parentFolders: Set<URL> = []
+
+        for path in item.selectedTorrentFilePaths where path.contains("/") {
+            parentFolders.insert(folder.appending(path: path).deletingLastPathComponent())
+        }
+
+        for folderURL in parentFolders.sorted(by: { $0.path.count > $1.path.count }) {
+            var currentURL = folderURL
+
+            while currentURL.standardizedFileURL.path != rootPath {
+                guard fileManager.fileExists(atPath: currentURL.path) else {
+                    currentURL = currentURL.deletingLastPathComponent()
+                    continue
+                }
+
+                let contents = try fileManager.contentsOfDirectory(atPath: currentURL.path)
+                guard contents.isEmpty else { break }
+
+                try await trashExistingItems([currentURL])
+                currentURL = currentURL.deletingLastPathComponent()
+            }
+        }
     }
 
     /// 依照目前 Table selection 取出完整項目，並保持列表原本排序。
