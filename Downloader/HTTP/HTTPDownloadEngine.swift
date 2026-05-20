@@ -41,6 +41,13 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         var segments: [Int: SegmentState]
     }
 
+    /// 用實際傳輸中的時間計算平均速度，避免暫停時間拉低完成後的 Avg speed。
+    private struct TransferTiming {
+        var firstReceived: Int64
+        var activeStartedAt: Date?
+        var accumulatedActiveTime: TimeInterval = 0
+    }
+
     /// HTTP 分段數。4 條連線通常已經有明顯加速，也不會太容易被 server 視為濫用。
     private static let segmentedThreadCount = 4
 
@@ -82,6 +89,8 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
     private var singleExpectedBytesByID: [DownloadItem.ID: Int64] = [:]
     /// 單連線目前已收到 byte 數。暫停續傳時會由本地檔案大小開始。
     private var singleReceivedBytesByID: [DownloadItem.ID: Int64] = [:]
+    /// 記錄 HTTP 下載實際有在傳輸的時間；暫停期間不會計入平均速度。
+    private var transferTimingsByID: [DownloadItem.ID: TransferTiming] = [:]
     /// 每個單線 task 的起始 offset，用來判斷 response 應該 append 還是重寫。
     private var singleStartOffsetsByTaskID: [Int: Int64] = [:]
     /// 正在由單線切換到分段的 item。取消舊 task 時不要誤判為真正失敗。
@@ -117,6 +126,8 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
     ///
     /// 單連線和分段下載都會保留已寫入的 `.part-N.tmp`，之後用 Range 接續。
     func pause(id: DownloadItem.ID) {
+        suspendTransferTiming(id: id)
+
         if let dataTasks = dataTasksByID[id] {
             dataTasks.forEach { $0.cancel() }
             dataTasksByID[id] = nil
@@ -143,6 +154,7 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         singleTargetURLsByID[id] = nil
         singleExpectedBytesByID[id] = nil
         singleReceivedBytesByID[id] = nil
+        transferTimingsByID[id] = nil
         switchingToSegmentedIDs.remove(id)
     }
 
@@ -216,6 +228,7 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         itemsByID[item.id] = item
         singleReceivedBytesByID[item.id] = existingBytes
         singleStartOffsetsByTaskID[task.taskIdentifier] = existingBytes
+        beginTransferTiming(id: item.id, received: existingBytes)
         notifyStatus(id: item.id, message: "Single connection")
         task.resume()
     }
@@ -258,6 +271,7 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         )
         dataTasksByID[item.id] = tasks
         itemsByID[item.id] = item
+        beginTransferTiming(id: item.id, received: 0)
         notifyStatus(id: item.id, message: "\(Self.segmentedThreadCount) connections")
 
         tasks.forEach { $0.resume() }
@@ -410,6 +424,7 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
                 try? Data().write(to: fileURL)
                 singleStartOffsetsByTaskID[dataTask.taskIdentifier] = 0
                 singleReceivedBytesByID[id] = 0
+                resetTransferTiming(id: id, received: 0)
             }
 
             let expected = httpResponse.expectedContentLength > 0
@@ -531,6 +546,8 @@ private extension HTTPDownloadEngine {
     ///
     /// 即時速度會跳得很厲害，所以這裡每 0.5 秒取樣一次，並用 70/30 權重平滑顯示。
     func updateProgress(id: DownloadItem.ID, received: Int64, expected: Int64) {
+        beginTransferTiming(id: id, received: received)
+
         let now = Date()
         let speed: Int64
 
@@ -563,6 +580,48 @@ private extension HTTPDownloadEngine {
         }
     }
 
+    /// 開始或恢復計算實際傳輸時間。
+    func beginTransferTiming(id: DownloadItem.ID, received: Int64) {
+        if var timing = transferTimingsByID[id] {
+            guard timing.activeStartedAt == nil else { return }
+            timing.activeStartedAt = Date()
+            transferTimingsByID[id] = timing
+            return
+        }
+
+        transferTimingsByID[id] = TransferTiming(firstReceived: received, activeStartedAt: Date())
+    }
+
+    /// 暫停時計入本次 active 時間，之後 resume 再繼續累加。
+    func suspendTransferTiming(id: DownloadItem.ID) {
+        guard var timing = transferTimingsByID[id],
+              let activeStartedAt = timing.activeStartedAt
+        else { return }
+
+        timing.accumulatedActiveTime += Date().timeIntervalSince(activeStartedAt)
+        timing.activeStartedAt = nil
+        transferTimingsByID[id] = timing
+    }
+
+    /// 從頭重傳時重設基準，避免把已被 server 忽略的舊 byte 算進平均。
+    func resetTransferTiming(id: DownloadItem.ID, received: Int64) {
+        transferTimingsByID[id] = TransferTiming(firstReceived: received, activeStartedAt: Date())
+    }
+
+    /// 以實際傳輸時間計算平均速度；沒有足夠資料時交回 nil 讓上層 fallback。
+    func averageTransferSpeed(id: DownloadItem.ID, received: Int64) -> Int64? {
+        guard let timing = transferTimingsByID[id] else { return nil }
+
+        var activeTime = timing.accumulatedActiveTime
+        if let activeStartedAt = timing.activeStartedAt {
+            activeTime += Date().timeIntervalSince(activeStartedAt)
+        }
+
+        let transferredBytes = max(0, received - timing.firstReceived)
+        guard activeTime > 0, transferredBytes > 0 else { return nil }
+        return Int64(Double(transferredBytes) / activeTime)
+    }
+
     /// 把所有分段暫存檔按 index 合併成最終檔案。
     func mergeSegmentedDownload(id: DownloadItem.ID) throws {
         guard let state = segmentedDownloads[id] else { return }
@@ -590,8 +649,10 @@ private extension HTTPDownloadEngine {
             }
         }
 
+        let received = state.segments.values.reduce(Int64(0)) { $0 + $1.received }
+        let expected = state.totalBytes
         cleanupSegmentedDownload(id: id)
-        finish(id: id, fileURL: state.targetURL)
+        finish(id: id, fileURL: state.targetURL, received: received, expected: expected)
     }
 
     /// 單連線下載一開始先建立 `filename.part-0.tmp`，讓使用者在資料夾看到未完成項目。
@@ -644,8 +705,10 @@ private extension HTTPDownloadEngine {
                 }
                 try FileManager.default.moveItem(at: incompleteURL, to: targetURL)
             }
+            let received = max(singleReceivedBytesByID[id] ?? 0, fileSize(at: targetURL))
+            let expected = max(singleExpectedBytesByID[id] ?? 0, received)
             incompleteFilesByID[id] = nil
-            finish(id: id, fileURL: targetURL)
+            finish(id: id, fileURL: targetURL, received: received, expected: expected)
         } catch {
             fail(id: id, error: error)
         }
@@ -688,6 +751,7 @@ private extension HTTPDownloadEngine {
         let received = state.segments.values.reduce(Int64(0)) { $0 + $1.received }
         lastSamples[id] = (Date(), received)
         displayedSpeeds[id] = 0
+        beginTransferTiming(id: id, received: received)
 
         if state.segments.values.allSatisfy(\.isFinished) {
             do {
@@ -750,7 +814,10 @@ private extension HTTPDownloadEngine {
     }
 
     /// 完成後清理 engine 狀態並回報 delegate。
-    func finish(id: DownloadItem.ID, fileURL: URL) {
+    func finish(id: DownloadItem.ID, fileURL: URL, received: Int64? = nil, expected: Int64? = nil) {
+        let finalReceived = received ?? singleReceivedBytesByID[id] ?? 0
+        let finalExpected = expected ?? singleExpectedBytesByID[id] ?? finalReceived
+        let averageSpeed = averageTransferSpeed(id: id, received: finalReceived)
         singleDataTasksByID[id] = nil
         dataTasksByID[id] = nil
         removeIncompleteFile(id: id)
@@ -761,9 +828,10 @@ private extension HTTPDownloadEngine {
         singleTargetURLsByID[id] = nil
         singleExpectedBytesByID[id] = nil
         singleReceivedBytesByID[id] = nil
+        transferTimingsByID[id] = nil
         switchingToSegmentedIDs.remove(id)
         Task { @MainActor [weak self] in
-            self?.delegate?.complete(id: id, fileURL: fileURL, received: nil, expected: nil, averageBytesPerSecond: nil)
+            self?.delegate?.complete(id: id, fileURL: fileURL, received: finalReceived, expected: finalExpected, averageBytesPerSecond: averageSpeed)
         }
     }
 
@@ -778,6 +846,7 @@ private extension HTTPDownloadEngine {
         singleTargetURLsByID[id] = nil
         singleExpectedBytesByID[id] = nil
         singleReceivedBytesByID[id] = nil
+        transferTimingsByID[id] = nil
         switchingToSegmentedIDs.remove(id)
         Task { @MainActor [weak self] in
             self?.delegate?.fail(id: id, errorMessage: error.localizedDescription)
