@@ -15,6 +15,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)pause:(NSString *)identifier;
 /// Resumes a torrent and reannounces it to trackers/DHT/LSD.
 - (void)resume:(NSString *)identifier;
+/// Resumes metadata/peer discovery without allowing payload download.
+- (void)resumeDiscoveryOnly:(NSString *)identifier;
 /// Removes a torrent from the libtorrent session.
 - (void)remove:(NSString *)identifier;
 /// Forces tracker, DHT, and LSD announce.

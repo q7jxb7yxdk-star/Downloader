@@ -120,7 +120,11 @@ final class TorrentDownloadEngine {
             selectedFileIndexesByItemID[item.id] = item.selectedTorrentFileIndexes
         }
         pausedItemIDs.remove(item.id)
-        bridge.resume(torrentID)
+        if waitingForFileSelectionItemIDs.contains(item.id) {
+            bridge.resumeDiscoveryOnly(torrentID)
+        } else {
+            bridge.resume(torrentID)
+        }
         startTimerIfNeeded()
     }
 

@@ -200,6 +200,18 @@ namespace lt = libtorrent;
     }
 }
 
+- (void)resumeDiscoveryOnly:(NSString *)identifier {
+    auto found = _handles.find(identifier.UTF8String);
+    if (found != _handles.end() && found->second.is_valid()) {
+        // Keep upload_mode enabled while the app is waiting for file selection.
+        found->second.unset_flags(lt::torrent_flags::auto_managed);
+        found->second.resume();
+        found->second.force_reannounce(0, -1, lt::torrent_handle::ignore_min_interval);
+        found->second.force_dht_announce();
+        found->second.force_lsd_announce();
+    }
+}
+
 - (void)remove:(NSString *)identifier {
     auto found = _handles.find(identifier.UTF8String);
     if (found != _handles.end()) {
