@@ -6,7 +6,7 @@ protocol TorrentDownloadEngineDelegate: AnyObject {
     func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64)
     func updateStatusText(id: DownloadItem.ID, message: String?)
     func torrentFilesReady(id: DownloadItem.ID, title: String, files: [TorrentFileEntry])
-    func complete(id: DownloadItem.ID, fileURL: URL)
+    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?)
     func fail(id: DownloadItem.ID, errorMessage: String?)
 }
 
@@ -16,6 +16,12 @@ protocol TorrentDownloadEngineDelegate: AnyObject {
 /// 同時處理 macOS sandbox folder access、檔案選擇 sheet、暫停/繼續等 App 邏輯。
 @MainActor
 final class TorrentDownloadEngine {
+    private struct PayloadTiming {
+        let firstReceived: Int64
+        var activeStartedAt: Date?
+        var accumulatedActiveTime: TimeInterval = 0
+    }
+
     private weak var delegate: TorrentDownloadEngineDelegate?
 
     /// Objective-C++ bridge，真正和 C++ libtorrent 溝通。
@@ -40,6 +46,8 @@ final class TorrentDownloadEngine {
 
     /// 找 metadata 時定期 reannounce，提升找到 peer/metadata 的機會。
     private var metadataPollCountsByTorrentID: [String: Int] = [:]
+    /// BT 平均速度只計算實際 payload 下載時間，不包括 metadata、等待選檔和暫停。
+    private var payloadTimingsByTorrentID: [String: PayloadTiming] = [:]
     private var timer: Timer?
 
     init(delegate: TorrentDownloadEngineDelegate) {
@@ -82,6 +90,7 @@ final class TorrentDownloadEngine {
     func pause(id: DownloadItem.ID) {
         guard let torrentID = torrentID(for: id) else { return }
         pausedItemIDs.insert(id)
+        suspendPayloadTiming(for: torrentID)
         bridge.pause(torrentID)
     }
 
@@ -96,6 +105,7 @@ final class TorrentDownloadEngine {
         waitingForFileSelectionItemIDs.remove(id)
         selectedFileIndexesByItemID[id] = nil
         metadataPollCountsByTorrentID[torrentID] = nil
+        payloadTimingsByTorrentID[torrentID] = nil
         securityScopedFoldersByTorrentID.removeValue(forKey: torrentID)?.stopAccessingSecurityScopedResource()
     }
 
@@ -224,13 +234,18 @@ final class TorrentDownloadEngine {
                 continue
             }
 
+            if hasMetadata && selectionRequestedItemIDs.contains(itemID) {
+                beginPayloadTiming(for: torrentID, received: received)
+            }
+
             if isFinished {
                 let saveFolder = saveFoldersByTorrentID[torrentID] ?? FolderBookmarkStore.fallbackFolder
+                let averageSpeed = averagePayloadSpeed(for: torrentID, received: received)
                 // 完成後把 `.tmp` 檔名還原成原本檔名。
                 bridge.restoreOriginalFileNames(torrentID)
                 // BT 可能包含多個檔案，所以這裡回報的是保存資料夾，
                 // Finder 打開時會讓使用者看到整個下載位置。
-                delegate?.complete(id: itemID, fileURL: saveFolder)
+                delegate?.complete(id: itemID, fileURL: saveFolder, received: received, expected: expected, averageBytesPerSecond: averageSpeed)
                 completedTorrentIDs.append(torrentID)
             } else {
                 // 使用 payload speed，而不是總 download_rate，避免 metadata/DHT 流量顯示成下載速度。
@@ -249,6 +264,7 @@ final class TorrentDownloadEngine {
             itemIDsByTorrentID[torrentID] = nil
             saveFoldersByTorrentID[torrentID] = nil
             metadataPollCountsByTorrentID[torrentID] = nil
+            payloadTimingsByTorrentID[torrentID] = nil
             if let completedItemID {
                 pausedItemIDs.remove(completedItemID)
                 selectionRequestedItemIDs.remove(completedItemID)
@@ -262,6 +278,48 @@ final class TorrentDownloadEngine {
     /// 從 App item id 找回 libtorrent identifier。
     private func torrentID(for itemID: DownloadItem.ID) -> String? {
         itemIDsByTorrentID.first { $0.value == itemID }?.key
+    }
+
+    /// 記錄開始下載 payload 的時間點。metadata 尋找和等待使用者選檔不計入平均速度。
+    private func beginPayloadTiming(for torrentID: String, received: Int64) {
+        if payloadTimingsByTorrentID[torrentID] == nil {
+            payloadTimingsByTorrentID[torrentID] = PayloadTiming(firstReceived: received, activeStartedAt: Date())
+            return
+        }
+
+        guard var timing = payloadTimingsByTorrentID[torrentID], timing.activeStartedAt == nil else { return }
+        timing.activeStartedAt = Date()
+        payloadTimingsByTorrentID[torrentID] = timing
+    }
+
+    /// 暫停時結算已累積的有效下載時間。
+    private func suspendPayloadTiming(for torrentID: String) {
+        guard var timing = payloadTimingsByTorrentID[torrentID],
+              let activeStartedAt = timing.activeStartedAt
+        else {
+            return
+        }
+
+        timing.accumulatedActiveTime += Date().timeIntervalSince(activeStartedAt)
+        timing.activeStartedAt = nil
+        payloadTimingsByTorrentID[torrentID] = timing
+    }
+
+    /// 以實際 payload 下載期間和新增 payload bytes 計算 BT 平均速度。
+    private func averagePayloadSpeed(for torrentID: String, received: Int64) -> Int64? {
+        guard var timing = payloadTimingsByTorrentID[torrentID] else { return nil }
+
+        if let activeStartedAt = timing.activeStartedAt {
+            timing.accumulatedActiveTime += Date().timeIntervalSince(activeStartedAt)
+            timing.activeStartedAt = nil
+            payloadTimingsByTorrentID[torrentID] = timing
+        }
+
+        let transferredBytes = max(0, received - timing.firstReceived)
+        guard transferredBytes > 0 else { return nil }
+
+        let elapsed = max(timing.accumulatedActiveTime, 1)
+        return Int64(Double(transferredBytes) / elapsed)
     }
 
     /// 組合列表狀態欄文字。

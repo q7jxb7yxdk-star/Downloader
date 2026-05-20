@@ -7,7 +7,7 @@ import Foundation
 protocol HTTPDownloadEngineDelegate: AnyObject {
     func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64)
     func updateStatusText(id: DownloadItem.ID, message: String?)
-    func complete(id: DownloadItem.ID, fileURL: URL)
+    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?)
     func fail(id: DownloadItem.ID, errorMessage: String?)
 }
 
@@ -763,7 +763,7 @@ private extension HTTPDownloadEngine {
         singleReceivedBytesByID[id] = nil
         switchingToSegmentedIDs.remove(id)
         Task { @MainActor [weak self] in
-            self?.delegate?.complete(id: id, fileURL: fileURL)
+            self?.delegate?.complete(id: id, fileURL: fileURL, received: nil, expected: nil, averageBytesPerSecond: nil)
         }
     }
 

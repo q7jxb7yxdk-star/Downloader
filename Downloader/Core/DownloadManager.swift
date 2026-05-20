@@ -324,16 +324,26 @@ final class DownloadManager: NSObject, ObservableObject {
     /// Engine 回報下載完成。
     ///
     /// 這裡同時計算平均速度，並觸發 macOS 系統通知。
-    func complete(id: DownloadItem.ID, fileURL: URL) {
+    func complete(
+        id: DownloadItem.ID,
+        fileURL: URL,
+        received: Int64? = nil,
+        expected: Int64? = nil,
+        averageBytesPerSecond: Int64? = nil
+    ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         guard !items[index].isTrashed else { return }
+        let finalReceived = received ?? items[index].bytesReceived
+        let finalExpected = expected ?? items[index].bytesExpected
         let elapsed = max(Date().timeIntervalSince(items[index].createdAt), 1)
-        let completedBytes = max(items[index].bytesReceived, items[index].bytesExpected)
+        let completedBytes = max(finalReceived, finalExpected)
 
         items[index].progress = 1
         items[index].status = .completed
+        items[index].bytesReceived = max(items[index].bytesReceived, finalReceived, completedBytes)
+        items[index].bytesExpected = max(items[index].bytesExpected, finalExpected, completedBytes)
         items[index].bytesPerSecond = 0
-        items[index].averageBytesPerSecond = completedBytes > 0 ? Int64(Double(completedBytes) / elapsed) : 0
+        items[index].averageBytesPerSecond = averageBytesPerSecond ?? (completedBytes > 0 ? Int64(Double(completedBytes) / elapsed) : 0)
         items[index].localFileURL = fileURL
         items[index].errorMessage = nil
         NotificationManager.shared.downloadDidFinish(name: items[index].name)
