@@ -3,10 +3,10 @@ import Foundation
 /// BT engine 回報狀態給 DownloadManager 的介面。
 @MainActor
 protocol TorrentDownloadEngineDelegate: AnyObject {
-    func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64)
+    func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64, uploadSpeed: Int64)
     func updateStatusText(id: DownloadItem.ID, message: String?)
     func torrentFilesReady(id: DownloadItem.ID, title: String, files: [TorrentFileEntry])
-    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?)
+    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?, averageUploadBytesPerSecond: Int64?)
     func fail(id: DownloadItem.ID, errorMessage: String?)
 }
 
@@ -18,6 +18,7 @@ protocol TorrentDownloadEngineDelegate: AnyObject {
 final class TorrentDownloadEngine {
     private struct PayloadTiming {
         let firstReceived: Int64
+        let firstUploaded: Int64
         var activeStartedAt: Date?
         var accumulatedActiveTime: TimeInterval = 0
     }
@@ -168,6 +169,8 @@ final class TorrentDownloadEngine {
             // 如果某個欄位缺失，就用安全預設值，避免 UI 因為 bridge 回傳異常而 crash。
             let progress = (status["progress"] as? NSNumber)?.doubleValue ?? 0
             let payloadSpeed = (status["downloadPayloadRate"] as? NSNumber)?.int64Value ?? 0
+            let uploadPayloadSpeed = (status["uploadPayloadRate"] as? NSNumber)?.int64Value ?? 0
+            let uploaded = (status["totalPayloadUpload"] as? NSNumber)?.int64Value ?? 0
             let expected = (status["totalWanted"] as? NSNumber)?.int64Value ?? 0
             let received = (status["totalWantedDone"] as? NSNumber)?.int64Value ?? 0
             let isFinished = (status["isFinished"] as? NSNumber)?.boolValue ?? false
@@ -235,21 +238,35 @@ final class TorrentDownloadEngine {
             }
 
             if hasMetadata && selectionRequestedItemIDs.contains(itemID) {
-                beginPayloadTiming(for: torrentID, received: received)
+                beginPayloadTiming(for: torrentID, received: received, uploaded: uploaded)
             }
 
             if isFinished {
                 let saveFolder = saveFoldersByTorrentID[torrentID] ?? FolderBookmarkStore.fallbackFolder
-                let averageSpeed = averagePayloadSpeed(for: torrentID, received: received)
+                let averageSpeeds = averagePayloadSpeeds(for: torrentID, received: received, uploaded: uploaded)
                 // 完成後把 `.tmp` 檔名還原成原本檔名。
                 bridge.restoreOriginalFileNames(torrentID)
                 // BT 可能包含多個檔案，所以這裡回報的是保存資料夾，
                 // Finder 打開時會讓使用者看到整個下載位置。
-                delegate?.complete(id: itemID, fileURL: saveFolder, received: received, expected: expected, averageBytesPerSecond: averageSpeed)
+                delegate?.complete(
+                    id: itemID,
+                    fileURL: saveFolder,
+                    received: received,
+                    expected: expected,
+                    averageBytesPerSecond: averageSpeeds.download,
+                    averageUploadBytesPerSecond: averageSpeeds.upload
+                )
                 completedTorrentIDs.append(torrentID)
             } else {
                 // 使用 payload speed，而不是總 download_rate，避免 metadata/DHT 流量顯示成下載速度。
-                delegate?.update(id: itemID, progress: progress, received: received, expected: expected, speed: hasMetadata ? payloadSpeed : 0)
+                delegate?.update(
+                    id: itemID,
+                    progress: progress,
+                    received: received,
+                    expected: expected,
+                    speed: hasMetadata ? payloadSpeed : 0,
+                    uploadSpeed: hasMetadata ? uploadPayloadSpeed : 0
+                )
                 delegate?.updateStatusText(
                     id: itemID,
                     message: torrentStatusMessage(state: state, hasMetadata: hasMetadata, seeds: seeds, peers: peers, candidates: candidates)
@@ -280,10 +297,10 @@ final class TorrentDownloadEngine {
         itemIDsByTorrentID.first { $0.value == itemID }?.key
     }
 
-    /// 記錄開始下載 payload 的時間點。metadata 尋找和等待使用者選檔不計入平均速度。
-    private func beginPayloadTiming(for torrentID: String, received: Int64) {
+    /// 記錄開始傳輸 payload 的時間點。metadata 尋找和等待使用者選檔不計入平均速度。
+    private func beginPayloadTiming(for torrentID: String, received: Int64, uploaded: Int64) {
         if payloadTimingsByTorrentID[torrentID] == nil {
-            payloadTimingsByTorrentID[torrentID] = PayloadTiming(firstReceived: received, activeStartedAt: Date())
+            payloadTimingsByTorrentID[torrentID] = PayloadTiming(firstReceived: received, firstUploaded: uploaded, activeStartedAt: Date())
             return
         }
 
@@ -305,9 +322,9 @@ final class TorrentDownloadEngine {
         payloadTimingsByTorrentID[torrentID] = timing
     }
 
-    /// 以實際 payload 下載期間和新增 payload bytes 計算 BT 平均速度。
-    private func averagePayloadSpeed(for torrentID: String, received: Int64) -> Int64? {
-        guard var timing = payloadTimingsByTorrentID[torrentID] else { return nil }
+    /// 以實際 payload 傳輸期間和新增 payload bytes 計算 BT 平均下載/上載速度。
+    private func averagePayloadSpeeds(for torrentID: String, received: Int64, uploaded: Int64) -> (download: Int64?, upload: Int64?) {
+        guard var timing = payloadTimingsByTorrentID[torrentID] else { return (nil, nil) }
 
         if let activeStartedAt = timing.activeStartedAt {
             timing.accumulatedActiveTime += Date().timeIntervalSince(activeStartedAt)
@@ -315,11 +332,12 @@ final class TorrentDownloadEngine {
             payloadTimingsByTorrentID[torrentID] = timing
         }
 
-        let transferredBytes = max(0, received - timing.firstReceived)
-        guard transferredBytes > 0 else { return nil }
-
         let elapsed = max(timing.accumulatedActiveTime, 1)
-        return Int64(Double(transferredBytes) / elapsed)
+        let downloadedBytes = max(0, received - timing.firstReceived)
+        let uploadedBytes = max(0, uploaded - timing.firstUploaded)
+        let averageDownload = downloadedBytes > 0 ? Int64(Double(downloadedBytes) / elapsed) : nil
+        let averageUpload = uploadedBytes > 0 ? Int64(Double(uploadedBytes) / elapsed) : 0
+        return (averageDownload, averageUpload)
     }
 
     /// 組合列表狀態欄文字。

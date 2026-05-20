@@ -25,6 +25,7 @@ final class DownloadStore {
             if restored.status == .downloading {
                 restored.status = .paused
                 restored.bytesPerSecond = 0
+                restored.uploadBytesPerSecond = 0
             }
             return restored
         }

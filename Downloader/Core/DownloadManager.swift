@@ -183,6 +183,7 @@ final class DownloadManager: NSObject, ObservableObject {
             items[index].statusBeforeTrash = item.status
             items[index].isTrashed = true
             items[index].bytesPerSecond = 0
+            items[index].uploadBytesPerSecond = 0
             if item.status == .downloading || item.status == .queued {
                 items[index].status = .paused
             }
@@ -221,6 +222,7 @@ final class DownloadManager: NSObject, ObservableObject {
                 if let index = items.firstIndex(where: { $0.id == item.id }) {
                     items[index].status = .failed
                     items[index].bytesPerSecond = 0
+                    items[index].uploadBytesPerSecond = 0
                     items[index].errorMessage = "Unable to delete files: \(error.localizedDescription)"
                 }
             }
@@ -277,6 +279,7 @@ final class DownloadManager: NSObject, ObservableObject {
             torrentFileSelection = nil
             items[index].status = .paused
             items[index].bytesPerSecond = 0
+            items[index].uploadBytesPerSecond = 0
             items[index].errorMessage = nil
             store.save(items)
             return
@@ -289,7 +292,7 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     /// Engine 回報進度時呼叫。所有 UI 進度更新都集中在這裡。
-    func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64) {
+    func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64, uploadSpeed: Int64 = 0) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         guard !items[index].isTrashed else { return }
         guard items[index].status != .paused else { return }
@@ -297,6 +300,7 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].bytesReceived = received
         items[index].bytesExpected = expected
         items[index].bytesPerSecond = speed
+        items[index].uploadBytesPerSecond = uploadSpeed
         items[index].status = .downloading
         scheduleSave()
     }
@@ -329,7 +333,8 @@ final class DownloadManager: NSObject, ObservableObject {
         fileURL: URL,
         received: Int64? = nil,
         expected: Int64? = nil,
-        averageBytesPerSecond: Int64? = nil
+        averageBytesPerSecond: Int64? = nil,
+        averageUploadBytesPerSecond: Int64? = nil
     ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         guard !items[index].isTrashed else { return }
@@ -343,7 +348,9 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].bytesReceived = max(items[index].bytesReceived, finalReceived, completedBytes)
         items[index].bytesExpected = max(items[index].bytesExpected, finalExpected, completedBytes)
         items[index].bytesPerSecond = 0
+        items[index].uploadBytesPerSecond = 0
         items[index].averageBytesPerSecond = averageBytesPerSecond ?? (completedBytes > 0 ? Int64(Double(completedBytes) / elapsed) : 0)
+        items[index].averageUploadBytesPerSecond = averageUploadBytesPerSecond ?? 0
         items[index].localFileURL = fileURL
         items[index].errorMessage = nil
         NotificationManager.shared.downloadDidFinish(name: items[index].name)
@@ -391,6 +398,7 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].status = status
         if status != .downloading {
             items[index].bytesPerSecond = 0
+            items[index].uploadBytesPerSecond = 0
         }
         items[index].errorMessage = errorMessage
         store.save(items)
@@ -422,6 +430,7 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].statusBeforeTrash = nil
         items[index].errorMessage = nil
         items[index].bytesPerSecond = 0
+        items[index].uploadBytesPerSecond = 0
         store.save(items)
     }
 

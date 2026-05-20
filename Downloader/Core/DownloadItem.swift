@@ -67,7 +67,9 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var bytesReceived: Int64 = 0
     var bytesExpected: Int64 = 0
     var bytesPerSecond: Int64 = 0
+    var uploadBytesPerSecond: Int64 = 0
     var averageBytesPerSecond: Int64 = 0
+    var averageUploadBytesPerSecond: Int64 = 0
     /// BT 使用：保存使用者選中的 torrent file indexes，方便 App 重開後繼續。
     var selectedTorrentFileIndexes: Set<Int> = []
     /// BT 使用：保存使用者選中的 torrent 內部路徑，雙擊時可打開內容檔案所在資料夾。
@@ -93,7 +95,9 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         case bytesReceived
         case bytesExpected
         case bytesPerSecond
+        case uploadBytesPerSecond
         case averageBytesPerSecond
+        case averageUploadBytesPerSecond
         case selectedTorrentFileIndexes
         case selectedTorrentFilePaths
         case isTrashed
@@ -115,7 +119,9 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         bytesReceived: Int64 = 0,
         bytesExpected: Int64 = 0,
         bytesPerSecond: Int64 = 0,
+        uploadBytesPerSecond: Int64 = 0,
         averageBytesPerSecond: Int64 = 0,
+        averageUploadBytesPerSecond: Int64 = 0,
         selectedTorrentFileIndexes: Set<Int> = [],
         selectedTorrentFilePaths: [String] = [],
         isTrashed: Bool = false,
@@ -134,7 +140,9 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         self.bytesReceived = bytesReceived
         self.bytesExpected = bytesExpected
         self.bytesPerSecond = bytesPerSecond
+        self.uploadBytesPerSecond = uploadBytesPerSecond
         self.averageBytesPerSecond = averageBytesPerSecond
+        self.averageUploadBytesPerSecond = averageUploadBytesPerSecond
         self.selectedTorrentFileIndexes = selectedTorrentFileIndexes
         self.selectedTorrentFilePaths = selectedTorrentFilePaths
         self.isTrashed = isTrashed
@@ -159,7 +167,9 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         bytesReceived = try container.decodeIfPresent(Int64.self, forKey: .bytesReceived) ?? 0
         bytesExpected = try container.decodeIfPresent(Int64.self, forKey: .bytesExpected) ?? 0
         bytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .bytesPerSecond) ?? 0
+        uploadBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .uploadBytesPerSecond) ?? 0
         averageBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .averageBytesPerSecond) ?? 0
+        averageUploadBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .averageUploadBytesPerSecond) ?? 0
         selectedTorrentFileIndexes = try container.decodeIfPresent(Set<Int>.self, forKey: .selectedTorrentFileIndexes) ?? []
         selectedTorrentFilePaths = try container.decodeIfPresent([String].self, forKey: .selectedTorrentFilePaths) ?? []
         isTrashed = try container.decodeIfPresent(Bool.self, forKey: .isTrashed) ?? false
@@ -174,7 +184,14 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var speedText: String {
         switch status {
         case .downloading:
-            return ByteCountFormatter.string(fromByteCount: bytesPerSecond, countStyle: .binary) + "/s"
+            let downloadText = ByteCountFormatter.string(fromByteCount: bytesPerSecond, countStyle: .binary) + "/s"
+            guard kind == .torrent else { return downloadText }
+            let uploadText = ByteCountFormatter.string(fromByteCount: uploadBytesPerSecond, countStyle: .binary) + "/s"
+            return "↓ " + downloadText + "\n↑ " + uploadText
+        case .completed where kind == .torrent:
+            let downloadText = ByteCountFormatter.string(fromByteCount: averageBytesPerSecond, countStyle: .binary) + "/s"
+            let uploadText = ByteCountFormatter.string(fromByteCount: averageUploadBytesPerSecond, countStyle: .binary) + "/s"
+            return "Avg ↓ " + downloadText + "\nAvg ↑ " + uploadText
         case .completed where averageBytesPerSecond > 0:
             return "Avg " + ByteCountFormatter.string(fromByteCount: averageBytesPerSecond, countStyle: .binary) + "/s"
         default:

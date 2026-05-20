@@ -408,6 +408,8 @@ namespace lt = libtorrent;
         // downloadRate includes protocol chatter; downloadPayloadRate is real file payload.
         @"downloadRate": @((long long)status.download_rate),
         @"downloadPayloadRate": @((long long)status.download_payload_rate),
+        @"uploadPayloadRate": @((long long)status.upload_payload_rate),
+        @"totalPayloadUpload": @((long long)status.total_payload_upload),
         @"totalWanted": @((long long)status.total_wanted),
         @"totalWantedDone": @((long long)status.total_wanted_done),
         @"isFinished": @(status.is_finished),

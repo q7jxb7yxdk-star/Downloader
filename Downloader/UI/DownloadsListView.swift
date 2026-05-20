@@ -64,6 +64,7 @@ struct DownloadsListView: View {
                         // monospacedDigit 讓速度數字跳動時欄位比較穩定。
                         Text(item.speedText)
                             .monospacedDigit()
+                            .lineLimit(item.kind == .torrent && (item.status == .downloading || item.status == .completed) ? 2 : 1)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
                     .width(min: 53, ideal: 99)

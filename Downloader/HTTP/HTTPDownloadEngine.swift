@@ -5,9 +5,9 @@ import Foundation
 /// protocol 讓 engine 不需要直接依賴 SwiftUI 或 DownloadManager 的具體型別。
 @MainActor
 protocol HTTPDownloadEngineDelegate: AnyObject {
-    func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64)
+    func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64, uploadSpeed: Int64)
     func updateStatusText(id: DownloadItem.ID, message: String?)
-    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?)
+    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?, averageUploadBytesPerSecond: Int64?)
     func fail(id: DownloadItem.ID, errorMessage: String?)
 }
 
@@ -575,7 +575,8 @@ private extension HTTPDownloadEngine {
                 progress: expected > 0 ? Double(received) / Double(expected) : 0,
                 received: received,
                 expected: expected,
-                speed: speed
+                speed: speed,
+                uploadSpeed: 0
             )
         }
     }
@@ -831,7 +832,14 @@ private extension HTTPDownloadEngine {
         transferTimingsByID[id] = nil
         switchingToSegmentedIDs.remove(id)
         Task { @MainActor [weak self] in
-            self?.delegate?.complete(id: id, fileURL: fileURL, received: finalReceived, expected: finalExpected, averageBytesPerSecond: averageSpeed)
+            self?.delegate?.complete(
+                id: id,
+                fileURL: fileURL,
+                received: finalReceived,
+                expected: finalExpected,
+                averageBytesPerSecond: averageSpeed,
+                averageUploadBytesPerSecond: nil
+            )
         }
     }
 
