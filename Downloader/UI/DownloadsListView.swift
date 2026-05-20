@@ -34,28 +34,13 @@ struct DownloadsListView: View {
                                 .foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 2) {
                                 AdaptiveTooltipText(item.name)
-                                AdaptiveTooltipText(item.source.absoluteString, font: .caption, color: .secondary)
+                                ProgressSummaryView(item: item)
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
                     .width(min: 260, ideal: 420)
-
-                    TableColumn("Progress") { item in
-                        // ProgressView 顯示條狀進度，右邊用文字顯示百分比。
-                        HStack(spacing: 1) {
-                            ProgressView(value: item.progress)
-                                .frame(minWidth: 64)
-
-                            Text(item.percentText)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 35, alignment: .trailing)
-                        }
-                            .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
-                    }
-                    .width(min: 100, ideal: 110)
 
                     TableColumn("File Size") { item in
                         Text(item.fileSizeText)
@@ -127,6 +112,24 @@ struct DownloadsListView: View {
     /// 讓列表重新取得鍵盤焦點，selection 才會用藍色顯示。
     private func focusTable() {
         tableIsFocused = true
+    }
+}
+
+/// 檔名下方的輕量進度摘要。
+private struct ProgressSummaryView: View {
+    let item: DownloadItem
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ProgressView(value: item.progress)
+                .frame(maxWidth: .infinity)
+
+            Text(item.percentText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(width: 35, alignment: .trailing)
+        }
     }
 }
 

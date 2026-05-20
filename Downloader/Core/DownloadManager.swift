@@ -376,7 +376,12 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// BT engine 找到 metadata 後，要求 UI 顯示可選檔案列表。
     func torrentFilesReady(id: DownloadItem.ID, title: String, files: [TorrentFileEntry]) {
-        torrentFileSelection = TorrentFileSelection(itemID: id, title: title.isEmpty ? "Torrent" : title, files: files)
+        let displayTitle = title.isEmpty ? "Torrent" : title
+        if let index = items.firstIndex(where: { $0.id == id }),
+           items[index].name.isEmpty || items[index].name == "Magnet Download" {
+            items[index].name = displayTitle
+        }
+        torrentFileSelection = TorrentFileSelection(itemID: id, title: displayTitle, files: files)
         mark(id: id, status: .paused, errorMessage: "Waiting for file selection")
     }
 
