@@ -27,7 +27,14 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 已完成、正在下載、Trash 內的任務都不應該由 Resume 重新開始。
     var canResumeSelected: Bool {
         selectedItems.contains { item in
-            !item.isTrashed && item.status != .downloading && item.status != .completed
+            !item.isTrashed && item.status != .downloading && item.status != .completed && item.localFileURL == nil
+        }
+    }
+
+    /// 目前選取項目中是否有可以暫停的任務。
+    var canPauseSelected: Bool {
+        selectedItems.contains { item in
+            !item.isTrashed && (item.status == .downloading || item.status == .queued)
         }
     }
 
@@ -121,7 +128,7 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// 暫停目前選中的任務。
     func pauseSelected() {
-        for item in selectedItems where !item.isTrashed {
+        for item in selectedItems where !item.isTrashed && (item.status == .downloading || item.status == .queued) {
             switch item.kind {
             case .http:
                 httpEngine.pause(id: item.id)
@@ -134,7 +141,7 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// 繼續目前選中的任務。
     func resumeSelected() {
-        for item in selectedItems where !item.isTrashed && item.status != .completed && item.status != .downloading {
+        for item in selectedItems where !item.isTrashed && item.status != .completed && item.status != .downloading && item.localFileURL == nil {
             mark(id: item.id, status: .queued)
 
             switch item.kind {

@@ -56,6 +56,7 @@ struct ContentView: View {
                                 Label("Pause", systemImage: "pause.fill")
                             }
                             .help("Pause")
+                            .disabled(!downloadManager.canPauseSelected)
                         }
 
                         Button(role: .destructive) {
