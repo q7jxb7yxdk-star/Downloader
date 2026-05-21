@@ -51,15 +51,6 @@ struct DownloadsListView: View {
                     }
                     .width(min: 120, ideal: 130)
 
-                    TableColumn("Status") { item in
-                        Text(item.statusText)
-                            .foregroundStyle(item.status.color)
-                            .lineLimit(1)
-                            .help(item.statusText)
-                            .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
-                    }
-                    .width(min: 146, ideal: 323)
-
                     TableColumn("Speed") { item in
                         // monospacedDigit 讓速度數字跳動時欄位比較穩定。
                         Text(item.speedText)
@@ -68,6 +59,24 @@ struct DownloadsListView: View {
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
                     .width(min: 53, ideal: 99)
+
+                    TableColumn("ETA") { item in
+                        Text(item.downloadTimeText)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .help(item.downloadTimeText)
+                            .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
+                    }
+                    .width(min: 80, ideal: 100)
+
+                    TableColumn("Status") { item in
+                        Text(item.statusText)
+                            .foregroundStyle(item.status.color)
+                            .lineLimit(1)
+                            .help(item.statusText)
+                            .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
+                    }
+                    .width(min: 146, ideal: 323)
                 }
                 .frame(width: max(geometry.size.width, minimumTableWidth))
                 .focusable()
@@ -108,7 +117,7 @@ struct DownloadsListView: View {
     ///
     /// 視窗少於這個寬度時使用水平 scrollbar；大於這個寬度時只填滿視窗，
     /// 不額外製造右側空白。
-    private var minimumTableWidth: CGFloat { 700 }
+    private var minimumTableWidth: CGFloat { 800 }
 
     /// 讓列表重新取得鍵盤焦點，selection 才會用藍色顯示。
     private func focusTable() {

@@ -341,7 +341,8 @@ final class DownloadManager: NSObject, ObservableObject {
         received: Int64? = nil,
         expected: Int64? = nil,
         averageBytesPerSecond: Int64? = nil,
-        averageUploadBytesPerSecond: Int64? = nil
+        averageUploadBytesPerSecond: Int64? = nil,
+        activeDownloadDuration: TimeInterval? = nil
     ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         guard !items[index].isTrashed else { return }
@@ -358,6 +359,7 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].uploadBytesPerSecond = 0
         items[index].averageBytesPerSecond = averageBytesPerSecond ?? (completedBytes > 0 ? Int64(Double(completedBytes) / elapsed) : 0)
         items[index].averageUploadBytesPerSecond = averageUploadBytesPerSecond ?? 0
+        items[index].activeDownloadDuration = activeDownloadDuration ?? elapsed
         items[index].localFileURL = fileURL
         items[index].errorMessage = nil
         NotificationManager.shared.downloadDidFinish(name: items[index].name)

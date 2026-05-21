@@ -7,7 +7,7 @@ import Foundation
 protocol HTTPDownloadEngineDelegate: AnyObject {
     func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64, uploadSpeed: Int64)
     func updateStatusText(id: DownloadItem.ID, message: String?)
-    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?, averageUploadBytesPerSecond: Int64?)
+    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?, averageUploadBytesPerSecond: Int64?, activeDownloadDuration: TimeInterval?)
     func fail(id: DownloadItem.ID, errorMessage: String?)
 }
 
@@ -611,6 +611,15 @@ private extension HTTPDownloadEngine {
 
     /// 以實際傳輸時間計算平均速度；沒有足夠資料時交回 nil 讓上層 fallback。
     func averageTransferSpeed(id: DownloadItem.ID, received: Int64) -> Int64? {
+        guard let activeTime = activeTransferDuration(id: id),
+              let timing = transferTimingsByID[id]
+        else { return nil }
+        let transferredBytes = max(0, received - timing.firstReceived)
+        guard activeTime > 0, transferredBytes > 0 else { return nil }
+        return Int64(Double(transferredBytes) / activeTime)
+    }
+
+    func activeTransferDuration(id: DownloadItem.ID) -> TimeInterval? {
         guard let timing = transferTimingsByID[id] else { return nil }
 
         var activeTime = timing.accumulatedActiveTime
@@ -618,9 +627,7 @@ private extension HTTPDownloadEngine {
             activeTime += Date().timeIntervalSince(activeStartedAt)
         }
 
-        let transferredBytes = max(0, received - timing.firstReceived)
-        guard activeTime > 0, transferredBytes > 0 else { return nil }
-        return Int64(Double(transferredBytes) / activeTime)
+        return max(activeTime, 0)
     }
 
     /// 把所有分段暫存檔按 index 合併成最終檔案。
@@ -819,6 +826,7 @@ private extension HTTPDownloadEngine {
         let finalReceived = received ?? singleReceivedBytesByID[id] ?? 0
         let finalExpected = expected ?? singleExpectedBytesByID[id] ?? finalReceived
         let averageSpeed = averageTransferSpeed(id: id, received: finalReceived)
+        let activeDuration = activeTransferDuration(id: id)
         singleDataTasksByID[id] = nil
         dataTasksByID[id] = nil
         removeIncompleteFile(id: id)
@@ -838,7 +846,8 @@ private extension HTTPDownloadEngine {
                 received: finalReceived,
                 expected: finalExpected,
                 averageBytesPerSecond: averageSpeed,
-                averageUploadBytesPerSecond: nil
+                averageUploadBytesPerSecond: nil,
+                activeDownloadDuration: activeDuration
             )
         }
     }

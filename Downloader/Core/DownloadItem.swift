@@ -70,6 +70,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var uploadBytesPerSecond: Int64 = 0
     var averageBytesPerSecond: Int64 = 0
     var averageUploadBytesPerSecond: Int64 = 0
+    var activeDownloadDuration: TimeInterval = 0
     /// BT 使用：保存使用者選中的 torrent file indexes，方便 App 重開後繼續。
     var selectedTorrentFileIndexes: Set<Int> = []
     /// BT 使用：保存使用者選中的 torrent 內部路徑，雙擊時可打開內容檔案所在資料夾。
@@ -98,6 +99,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         case uploadBytesPerSecond
         case averageBytesPerSecond
         case averageUploadBytesPerSecond
+        case activeDownloadDuration
         case selectedTorrentFileIndexes
         case selectedTorrentFilePaths
         case isTrashed
@@ -122,6 +124,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         uploadBytesPerSecond: Int64 = 0,
         averageBytesPerSecond: Int64 = 0,
         averageUploadBytesPerSecond: Int64 = 0,
+        activeDownloadDuration: TimeInterval = 0,
         selectedTorrentFileIndexes: Set<Int> = [],
         selectedTorrentFilePaths: [String] = [],
         isTrashed: Bool = false,
@@ -143,6 +146,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         self.uploadBytesPerSecond = uploadBytesPerSecond
         self.averageBytesPerSecond = averageBytesPerSecond
         self.averageUploadBytesPerSecond = averageUploadBytesPerSecond
+        self.activeDownloadDuration = activeDownloadDuration
         self.selectedTorrentFileIndexes = selectedTorrentFileIndexes
         self.selectedTorrentFilePaths = selectedTorrentFilePaths
         self.isTrashed = isTrashed
@@ -170,6 +174,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         uploadBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .uploadBytesPerSecond) ?? 0
         averageBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .averageBytesPerSecond) ?? 0
         averageUploadBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .averageUploadBytesPerSecond) ?? 0
+        activeDownloadDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .activeDownloadDuration) ?? 0
         selectedTorrentFileIndexes = try container.decodeIfPresent(Set<Int>.self, forKey: .selectedTorrentFileIndexes) ?? []
         selectedTorrentFilePaths = try container.decodeIfPresent([String].self, forKey: .selectedTorrentFilePaths) ?? []
         isTrashed = try container.decodeIfPresent(Bool.self, forKey: .isTrashed) ?? false
@@ -216,6 +221,38 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         }
 
         return "-"
+    }
+
+    /// 下載中顯示預計剩餘時間；完成後顯示累計有效下載時間。
+    var downloadTimeText: String {
+        switch status {
+        case .downloading:
+            guard bytesExpected > bytesReceived, bytesPerSecond > 0 else { return "-" }
+            let remainingBytes = bytesExpected - bytesReceived
+            let remainingSeconds = TimeInterval(remainingBytes) / TimeInterval(bytesPerSecond)
+            return Self.durationText(remainingSeconds)
+        case .completed where activeDownloadDuration > 0:
+            return Self.durationText(activeDownloadDuration)
+        default:
+            return "-"
+        }
+    }
+
+    private static func durationText(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(duration.rounded()))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+
+        if minutes > 0 {
+            return "\(minutes)m \(seconds)s"
+        }
+
+        return "\(seconds)s"
     }
 
     /// 列表中顯示的狀態文字。

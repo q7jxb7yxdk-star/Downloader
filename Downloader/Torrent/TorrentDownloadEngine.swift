@@ -6,7 +6,7 @@ protocol TorrentDownloadEngineDelegate: AnyObject {
     func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64, uploadSpeed: Int64)
     func updateStatusText(id: DownloadItem.ID, message: String?)
     func torrentFilesReady(id: DownloadItem.ID, title: String, files: [TorrentFileEntry])
-    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?, averageUploadBytesPerSecond: Int64?)
+    func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?, averageUploadBytesPerSecond: Int64?, activeDownloadDuration: TimeInterval?)
     func fail(id: DownloadItem.ID, errorMessage: String?)
 }
 
@@ -258,7 +258,8 @@ final class TorrentDownloadEngine {
                     received: received,
                     expected: expected,
                     averageBytesPerSecond: averageSpeeds.download,
-                    averageUploadBytesPerSecond: averageSpeeds.upload
+                    averageUploadBytesPerSecond: averageSpeeds.upload,
+                    activeDownloadDuration: averageSpeeds.duration
                 )
                 completedTorrentIDs.append(torrentID)
             } else {
@@ -327,8 +328,8 @@ final class TorrentDownloadEngine {
     }
 
     /// 以實際 payload 傳輸期間和新增 payload bytes 計算 BT 平均下載/上載速度。
-    private func averagePayloadSpeeds(for torrentID: String, received: Int64, uploaded: Int64) -> (download: Int64?, upload: Int64?) {
-        guard var timing = payloadTimingsByTorrentID[torrentID] else { return (nil, nil) }
+    private func averagePayloadSpeeds(for torrentID: String, received: Int64, uploaded: Int64) -> (download: Int64?, upload: Int64?, duration: TimeInterval?) {
+        guard var timing = payloadTimingsByTorrentID[torrentID] else { return (nil, nil, nil) }
 
         if let activeStartedAt = timing.activeStartedAt {
             timing.accumulatedActiveTime += Date().timeIntervalSince(activeStartedAt)
@@ -341,7 +342,7 @@ final class TorrentDownloadEngine {
         let uploadedBytes = max(0, uploaded - timing.firstUploaded)
         let averageDownload = downloadedBytes > 0 ? Int64(Double(downloadedBytes) / elapsed) : nil
         let averageUpload = uploadedBytes > 0 ? Int64(Double(uploadedBytes) / elapsed) : 0
-        return (averageDownload, averageUpload)
+        return (averageDownload, averageUpload, elapsed)
     }
 
     /// 組合列表狀態欄文字。
