@@ -202,14 +202,17 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     /// 列表中顯示的檔案大小。
     ///
     /// `bytesExpected` 是伺服器或 torrent metadata 提供的總大小；
-    /// 如果暫時未知，就退而顯示目前已下載大小。
+    /// 如果暫時未知，就以 `-` 表示未知總大小。
     var fileSizeText: String {
+        let receivedText = ByteCountFormatter.string(fromByteCount: bytesReceived, countStyle: .binary)
+
         if bytesExpected > 0 {
-            return ByteCountFormatter.string(fromByteCount: bytesExpected, countStyle: .binary)
+            let expectedText = ByteCountFormatter.string(fromByteCount: bytesExpected, countStyle: .binary)
+            return receivedText + " / " + expectedText
         }
 
         if bytesReceived > 0 {
-            return ByteCountFormatter.string(fromByteCount: bytesReceived, countStyle: .binary)
+            return receivedText + " / -"
         }
 
         return "-"

@@ -49,7 +49,7 @@ struct DownloadsListView: View {
                             .help(item.fileSizeText)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 15, ideal: 20)
+                    .width(min: 120, ideal: 130)
 
                     TableColumn("Status") { item in
                         Text(item.statusText)
