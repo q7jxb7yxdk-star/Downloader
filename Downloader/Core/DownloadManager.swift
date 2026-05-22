@@ -569,8 +569,12 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 讓 Finder 執行刪除，這是最接近 Finder 自己「移到垃圾桶」的方式，
     /// 也最有機會在垃圾桶右鍵選單保留「放回原處 / Put Back」。
     private func trashItemsUsingFinder(_ urls: [URL]) throws {
-        let commands = urls.map { url in
-            "delete POSIX file \"\(appleScriptEscaped(url.path(percentEncoded: false)))\""
+        let commands = urls.enumerated().map { index, url in
+            var command = "delete POSIX file \"\(appleScriptEscaped(url.path(percentEncoded: false)))\""
+            if index < urls.count - 1 {
+                command += "\ndelay 0.15"
+            }
+            return command
         }.joined(separator: "\n")
 
         let source = """
