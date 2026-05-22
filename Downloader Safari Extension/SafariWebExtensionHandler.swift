@@ -1,49 +1,43 @@
-//
-//  SafariWebExtensionHandler.swift
-//  Downloader Safari Extension
-//
-//  Created by Sunny Yu on 10/5/2026.
-//
-
 import SafariServices
 import os.log
 
-class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
+final class SafariWebExtensionHandler: SFSafariExtensionHandler {
     private let appGroupIdentifier = "group.com.sunnyyu.Downloader"
     private let queueFileName = "pending-safari-downloads.json"
+    private let downloadCommand = "download-link"
 
-    func beginRequest(with context: NSExtensionContext) {
-        let request = context.inputItems.first as? NSExtensionItem
-
-        let profile: UUID?
-        if #available(iOS 17.0, macOS 14.0, *) {
-            profile = request?.userInfo?[SFExtensionProfileKey] as? UUID
-        } else {
-            profile = request?.userInfo?["profile"] as? UUID
+    override func validateContextMenuItem(
+        withCommand command: String,
+        in page: SFSafariPage,
+        userInfo: [String: Any]? = nil,
+        validationHandler: @escaping (Bool, String?) -> Void
+    ) {
+        guard command == downloadCommand else {
+            validationHandler(true, nil)
+            return
         }
 
-        let message: Any?
-        if #available(iOS 15.0, macOS 11.0, *) {
-            message = request?.userInfo?[SFExtensionMessageKey]
-        } else {
-            message = request?.userInfo?["message"]
-        }
+        validationHandler(false, nil)
+    }
 
-        os_log(.default, "Received message from browser.runtime.sendNativeMessage: %@ (profile: %@)", String(describing: message), profile?.uuidString ?? "none")
+    override func contextMenuItemSelected(
+        withCommand command: String,
+        in page: SFSafariPage,
+        userInfo: [String: Any]? = nil
+    ) {
+        guard command == downloadCommand,
+              let link = userInfo?["url"] as? String,
+              !link.isEmpty
+        else { return }
 
-        if let dictionary = message as? [String: Any],
-           dictionary["command"] as? String == "add-download",
-           let link = dictionary["url"] as? String {
-            enqueueDownload(link)
-            DistributedNotificationCenter.default().postNotificationName(
-                Notification.Name("com.sunnyyu.Downloader.addDownload"),
-                object: link,
-                userInfo: nil,
-                deliverImmediately: true
-            )
-        }
-
-        context.completeRequest(returningItems: nil, completionHandler: nil)
+        enqueueDownload(link)
+        DistributedNotificationCenter.default().postNotificationName(
+            Notification.Name("com.sunnyyu.Downloader.addDownload"),
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+        os_log(.default, "Queued Safari context menu download: %@", link)
     }
 
     private func enqueueDownload(_ link: String) {
@@ -71,5 +65,4 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
         return links
     }
-
 }

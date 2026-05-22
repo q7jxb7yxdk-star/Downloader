@@ -109,7 +109,8 @@ struct ContentView: View {
                 queue: .main
             ) { notification in
                 Task { @MainActor in
-                    flushPendingSafariDownloads()
+                    _ = flushPendingSafariDownloads()
+                    bringDownloaderToFront()
                 }
             }
         }
@@ -145,7 +146,8 @@ struct ContentView: View {
     }
 
     /// 讀取 Safari native extension 寫入 App Group 的下載 queue。
-    private func flushPendingSafariDownloads() {
+    @discardableResult
+    private func flushPendingSafariDownloads() -> Bool {
         let appGroupIdentifier = "group.com.sunnyyu.Downloader"
         let queueFileName = "pending-safari-downloads.json"
 
@@ -156,7 +158,7 @@ struct ContentView: View {
               let links = try? JSONDecoder().decode([String].self, from: data),
               !links.isEmpty
         else {
-            return
+            return false
         }
 
         if let emptyQueue = try? JSONEncoder().encode([String]()) {
@@ -170,14 +172,18 @@ struct ContentView: View {
         }
 
         bringDownloaderToFront()
+        return true
     }
 
     /// 把 Downloader 視窗帶到前景，給 Safari native extension 匯入下載後使用。
     private func bringDownloaderToFront() {
+        NSApp.setActivationPolicy(.regular)
+
         DispatchQueue.main.async {
-            NSApp.setActivationPolicy(.regular)
-            NSRunningApplication.current.activate(options: [.activateAllWindows])
-            NSApp.windows.first(where: { $0.isVisible })?.makeKeyAndOrderFront(nil)
+            if let window = NSApp.windows.first {
+                window.makeKeyAndOrderFront(nil)
+            }
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
 }
