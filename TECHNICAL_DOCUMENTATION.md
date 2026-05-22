@@ -53,8 +53,11 @@ Important fields:
 - `status`: queued, downloading, paused, completed, failed, unavailable.
 - `progress`: `0...1`.
 - `bytesReceived` / `bytesExpected`: downloaded and total byte count.
-- `bytesPerSecond`: live speed.
-- `averageBytesPerSecond`: final average speed.
+- `bytesPerSecond`: live download speed.
+- `uploadBytesPerSecond`: live BT upload speed.
+- `averageBytesPerSecond`: final average download speed.
+- `averageUploadBytesPerSecond`: final average BT upload speed.
+- `activeDownloadDuration`: accumulated active download time after completion.
 - `selectedTorrentFileIndexes`: saved BT file selection for resume after app restart.
 - `isTrashed`: soft-delete flag.
 - `statusBeforeTrash`: original status used when restoring from Trash.
@@ -233,6 +236,8 @@ speed = oldSpeed * 0.7 + instantSpeed * 0.3
 
 This keeps the speed column more readable.
 
+Average speed and completed download time are based on active transfer time. Paused time is not counted. For HTTP downloads, active time is accumulated while the transfer request is running. For BT downloads, active payload timing starts after metadata is available and the user has selected files, so metadata discovery and file-selection waiting time are not counted as payload download time.
+
 ## Torrent Download Flow
 
 Swift engine:
@@ -294,6 +299,20 @@ libtorrent exposes:
 - `download_payload_rate`: real file payload speed.
 
 Downloader displays `download_payload_rate`, so metadata discovery traffic does not look like real file download speed.
+
+For active BT downloads, the Speed column shows download speed and upload speed on two lines:
+
+```text
+↓ 12.4 MiB/s
+↑ 512 KiB/s
+```
+
+After completion, the same column shows average download and upload speeds:
+
+```text
+Avg ↓ 12.4 MiB/s
+Avg ↑ 512 KiB/s
+```
 
 ## File Naming
 
@@ -468,16 +487,15 @@ Table columns:
 
 ```swift
 TableColumn("Name")
-TableColumn("Progress")
-TableColumn("File Size")
-TableColumn("Status")
 TableColumn("Speed")
+TableColumn("ETA")
+TableColumn("Status")
 ```
 
 Column widths use:
 
 ```swift
-.width(min: 260, ideal: 420)
+.width(min: 380, ideal: 560)
 ```
 
 Meaning:
@@ -485,23 +503,26 @@ Meaning:
 - `min`: minimum width.
 - `ideal`: preferred width when there is enough room.
 
-Current Status width:
+Current column widths:
 
 ```swift
-.width(min: 146, ideal: 323)
-```
-
-Current File Size width:
-
-```swift
-.width(min: 15, ideal: 20)
+Name:   .width(min: 380, ideal: 560)
+Speed:  .width(min: 60, ideal: 120)
+ETA:    .width(min: 50, ideal: 80)
+Status: .width(min: 70, ideal: 110)
 ```
 
 `File Size` is displayed by `DownloadItem.fileSizeText`:
 
-- `bytesExpected > 0`: total expected size.
-- `bytesReceived > 0`: currently downloaded size when total size is not known yet.
+- `bytesExpected > 0`: downloaded size / total expected size.
+- `bytesReceived > 0`: downloaded size / `-` when total size is not known yet.
 - Otherwise: `-`.
+
+`ETA` is displayed by `DownloadItem.downloadTimeText`:
+
+- Downloading: estimated remaining time from remaining bytes and current speed.
+- Completed: accumulated active download time.
+- Paused, queued, failed, or unavailable: `-`.
 
 The table is wrapped in a horizontal `ScrollView`:
 
@@ -514,17 +535,19 @@ ScrollView(.horizontal) {
 
 If the window is too narrow, a horizontal scrollbar appears.
 
-### Progress Column
+### Name Column Progress Summary
 
 Progress UI:
 
 ```swift
-HStack(spacing: 1) {
+HStack(spacing: 6) {
     ProgressView(value: item.progress)
-        .frame(minWidth: 64)
+        .frame(maxWidth: .infinity)
 
     Text(item.percentText)
         .frame(width: 35, alignment: .trailing)
+
+    Text(item.fileSizeText)
 }
 ```
 
@@ -700,11 +723,32 @@ Not Available: <error message>
 Long Speed examples:
 
 ```text
+↓ 12.4 MiB/s
+↑ 512 KiB/s
+Avg ↓ 12.4 MiB/s
+Avg ↑ 512 KiB/s
 Avg 999.9 MiB/s
 Avg 1.0 GiB/s
 999.9 MiB/s
 1.0 GiB/s
 -
+```
+
+ETA examples:
+
+```text
+12s
+3m 20s
+1h 5m
+-
+```
+
+Name progress summary examples:
+
+```text
+42% 12.4 MiB / 100 MiB
+100% 1.0 GiB / 1.0 GiB
+0% -
 ```
 
 Error messages can be longer than the column width, so Status text is truncated and the full text is available through tooltip/help.

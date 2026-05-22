@@ -40,16 +40,7 @@ struct DownloadsListView: View {
                         }
                         .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 260, ideal: 420)
-
-                    TableColumn("File Size") { item in
-                        Text(item.fileSizeText)
-                            .monospacedDigit()
-                            .lineLimit(1)
-                            .help(item.fileSizeText)
-                            .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
-                    }
-                    .width(min: 120, ideal: 130)
+                    .width(min: 380, ideal: 560)
 
                     TableColumn("Speed") { item in
                         // monospacedDigit 讓速度數字跳動時欄位比較穩定。
@@ -58,7 +49,7 @@ struct DownloadsListView: View {
                             .lineLimit(item.kind == .torrent && (item.status == .downloading || item.status == .completed) ? 2 : 1)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 53, ideal: 99)
+                    .width(min: 60, ideal: 120)
 
                     TableColumn("ETA") { item in
                         Text(item.downloadTimeText)
@@ -67,7 +58,7 @@ struct DownloadsListView: View {
                             .help(item.downloadTimeText)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 80, ideal: 100)
+                    .width(min: 50, ideal: 80)
 
                     TableColumn("Status") { item in
                         Text(item.statusText)
@@ -76,7 +67,7 @@ struct DownloadsListView: View {
                             .help(item.statusText)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 146, ideal: 323)
+                    .width(min: 70, ideal: 110)
                 }
                 .frame(width: max(geometry.size.width, minimumTableWidth))
                 .focusable()
@@ -139,6 +130,13 @@ private struct ProgressSummaryView: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .frame(width: 35, alignment: .trailing)
+
+            Text(item.fileSizeText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .help(item.fileSizeText)
         }
     }
 }

@@ -12,9 +12,10 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - Torrent file selection after metadata is available.
 - Incomplete files are written directly to the selected download folder.
 - HTTP incomplete files use `.part-N.tmp`; BT incomplete files use `.tmp`.
-- Completed downloads show average download speed.
+- Completed downloads show average download speed. BT downloads also show upload speed.
 - Double-click a completed item to reveal it in Finder.
-- Downloads table shows progress, file size, status, and speed.
+- Downloads table shows name, progress, percentage, downloaded size / total size, speed, ETA, and status.
+- While downloading, ETA shows the estimated remaining time. After completion, it shows the accumulated active download time, excluding paused time.
 - Right-click actions: Resume, Pause, Show in Finder, Delete, Delete with Files.
 - Download completion notification and system sound.
 - Safari Extension project included for browser integration experiments.
