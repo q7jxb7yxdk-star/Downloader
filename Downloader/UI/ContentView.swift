@@ -108,15 +108,8 @@ struct ContentView: View {
                 object: nil,
                 queue: .main
             ) { notification in
-                guard let link = notification.object as? String,
-                      let downloadURL = URL(string: link)
-                else { return }
-
                 Task { @MainActor in
                     flushPendingSafariDownloads()
-
-                    let destination = FolderBookmarkStore.lastFolder()
-                    downloadManager.add(url: downloadURL, destination: destination)
                 }
             }
         }
@@ -174,6 +167,17 @@ struct ContentView: View {
         for link in links {
             guard let url = URL(string: link) else { continue }
             downloadManager.add(url: url, destination: destination)
+        }
+
+        bringDownloaderToFront()
+    }
+
+    /// 把 Downloader 視窗帶到前景，給 Safari native extension 匯入下載後使用。
+    private func bringDownloaderToFront() {
+        DispatchQueue.main.async {
+            NSApp.setActivationPolicy(.regular)
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            NSApp.windows.first(where: { $0.isVisible })?.makeKeyAndOrderFront(nil)
         }
     }
 }

@@ -31,7 +31,6 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
         os_log(.default, "Received message from browser.runtime.sendNativeMessage: %@ (profile: %@)", String(describing: message), profile?.uuidString ?? "none")
 
-        let didAddDownload: Bool
         if let dictionary = message as? [String: Any],
            dictionary["command"] as? String == "add-download",
            let link = dictionary["url"] as? String {
@@ -42,19 +41,9 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 userInfo: nil,
                 deliverImmediately: true
             )
-            didAddDownload = true
-        } else {
-            didAddDownload = false
         }
 
-        let response = NSExtensionItem()
-        if #available(iOS 15.0, macOS 11.0, *) {
-            response.userInfo = [ SFExtensionMessageKey: [ "ok": didAddDownload ] ]
-        } else {
-            response.userInfo = [ "message": [ "ok": didAddDownload ] ]
-        }
-
-        context.completeRequest(returningItems: [ response ], completionHandler: nil)
+        context.completeRequest(returningItems: nil, completionHandler: nil)
     }
 
     private func enqueueDownload(_ link: String) {
