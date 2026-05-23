@@ -30,7 +30,8 @@ UI 不直接操作 `URLSession` 或 libtorrent。畫面只呼叫 `DownloadManage
 | Bridge | `Downloader/Torrent/TorrentSessionBridge.h/.mm` | Objective-C++ wrapper around C++ libtorrent |
 | Persistence | `Downloader/Persistence/*.swift` | JSON task storage and security-scoped folder bookmarks |
 | Notifications | `Downloader/Notifications/NotificationManager.swift` | Completion notification and sound |
-| Browser | `Downloader/BrowserIntegration/URLSchemeHandler.swift` | Custom URL scheme parsing |
+| Safari Extension | `Downloader Safari Extension/*` | Native Safari context menu handoff |
+| Browser Fallback | `Downloader/BrowserIntegration/URLSchemeHandler.swift` | Custom URL scheme parsing |
 
 ## DownloadItem
 
@@ -59,6 +60,7 @@ Important fields:
 - `averageUploadBytesPerSecond`: final average BT upload speed.
 - `activeDownloadDuration`: accumulated active download time after completion.
 - `selectedTorrentFileIndexes`: saved BT file selection for resume after app restart.
+- `selectedTorrentFilePaths`: saved BT relative file paths used by Delete with Files and display naming.
 - `isTrashed`: soft-delete flag.
 - `statusBeforeTrash`: original status used when restoring from Trash.
 - `errorMessage`: error text, also reused for status details such as seeds/peers.
@@ -137,9 +139,10 @@ The trash operation prefers Finder automation:
 
 ```swift
 delete POSIX file "<path>"
+delay 0.15
 ```
 
-This is closest to a normal Finder trash action. If Finder automation fails, Downloader falls back to:
+Downloader sends each path to Finder one at a time and inserts a short delay between paths. This is closest to a normal Finder trash action and avoids several delete sounds playing on top of each other. If Finder automation fails, Downloader falls back to:
 
 ```swift
 NSWorkspace.shared.recycle(...)
@@ -644,21 +647,79 @@ It stores selected file indexes in:
 
 The checkbox uses `Binding<Bool>` because each toggle needs true/false, while the app stores a set of selected file indexes.
 
-## Safari Extension and URL Scheme
+## Safari Extension and URL Handoff
 
-Custom URL scheme parser:
+Downloader currently uses a native Safari App Extension for right-click downloads.
+
+```text
+Downloader Safari Extension/Info.plist
+Downloader Safari Extension/Resources/content.js
+Downloader Safari Extension/SafariWebExtensionHandler.swift
+Downloader/UI/ContentView.swift
+```
+
+### Native Context Menu Flow
+
+`Info.plist` declares:
+
+- `NSExtensionPointIdentifier`: `com.apple.Safari.extension`
+- `SFSafariContextMenu`: command `download-link`
+- `SFSafariContentScript`: `content.js`
+- `SFSafariWebsiteAccess`: all websites
+
+`content.js` runs on page context menu events:
+
+```javascript
+document.addEventListener("contextmenu", (event) => {
+  const link = event.target.closest("a[href]");
+  safari.extension.setContextMenuEventUserInfo(event, {
+    url: link ? link.href : ""
+  });
+}, false);
+```
+
+When the user chooses `Download with Downloader`, `SafariWebExtensionHandler.contextMenuItemSelected(...)`:
+
+1. Reads `userInfo["url"]`.
+2. Appends the link to the App Group file:
+
+```text
+group.com.sunnyyu.Downloader/pending-safari-downloads.json
+```
+
+3. Posts distributed notification:
+
+```swift
+Notification.Name("com.sunnyyu.Downloader.addDownload")
+```
+
+The distributed notification uses `object: nil`. The URL is not passed through the notification object because that previously caused tagged pointer / `count` crashes in Safari extension IPC. The App Group queue is the source of truth.
+
+The main app listens in `ContentView`, then `flushPendingSafariDownloads()`:
+
+1. Opens the App Group queue.
+2. Decodes pending links.
+3. Clears the queue.
+4. Adds each valid URL using the last selected download folder.
+5. Brings Downloader to the foreground.
+
+### URL Scheme Fallback
+
+Downloader still contains the custom URL scheme parser:
 
 ```text
 Downloader/BrowserIntegration/URLSchemeHandler.swift
 ```
 
-Expected URL format:
+Supported URL format:
 
 ```text
 downloader://add?url=https%3A%2F%2Fexample.com%2Ffile.zip
 ```
 
 `URLComponents` parses the query string, extracts `url`, and converts it back to `URL`.
+
+Safari's `Download with Downloader` context menu no longer uses this path. That avoids Safari repeatedly asking each website whether it can open Downloader through the URL scheme.
 
 Safari Extension development can leave stale extension builds in DerivedData. Clean only when Safari shows duplicate or old extensions:
 

@@ -344,7 +344,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = "Downloader Safari Extension/Downloader Safari Extension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20260522;
+				CURRENT_PROJECT_VERSION = 20260523;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = WX793X49GJ;
 				ENABLE_APP_SANDBOX = YES;
@@ -361,7 +361,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.1.1;
 				OTHER_LDFLAGS = (
 					"-framework",
@@ -387,7 +387,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = "Downloader Safari Extension/Downloader Safari Extension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20260522;
+				CURRENT_PROJECT_VERSION = 20260523;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = WX793X49GJ;
 				ENABLE_APP_SANDBOX = YES;
@@ -405,7 +405,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.1.1;
 				OTHER_LDFLAGS = (
 					"-framework",
@@ -557,7 +557,7 @@
 				CODE_SIGN_ENTITLEMENTS = Downloader/Downloader.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 20260522;
+				CURRENT_PROJECT_VERSION = 20260523;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = WX793X49GJ;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -579,6 +579,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.1.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -604,7 +605,7 @@
 				CODE_SIGN_ENTITLEMENTS = Downloader/Downloader.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 20260522;
+				CURRENT_PROJECT_VERSION = 20260523;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = WX793X49GJ;
 				"EXCLUDED_ARCHS[sdk=macosx*]" = x86_64;
@@ -627,6 +628,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.1.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",

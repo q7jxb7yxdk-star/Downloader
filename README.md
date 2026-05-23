@@ -18,7 +18,7 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - While downloading, ETA shows the estimated remaining time. After completion, it shows the accumulated active download time, excluding paused time.
 - Right-click actions: Resume, Pause, Show in Finder, Delete, Delete with Files.
 - Download completion notification and system sound.
-- Safari Extension project included for browser integration experiments.
+- Native Safari App Extension with a `Download with Downloader` link context menu.
 
 ## Requirements
 
@@ -53,7 +53,7 @@ Downloader/Torrent/              BT engine and libtorrent bridge
 Downloader/UI/                   SwiftUI views
 Downloader/Persistence/          JSON storage and folder bookmarks
 Downloader/Notifications/        Download-complete notifications
-Downloader/BrowserIntegration/   Custom URL scheme handling
+Downloader/BrowserIntegration/   Custom URL scheme fallback handling
 ```
 
 ## Build and Run
@@ -122,7 +122,7 @@ The Trash sidebar keeps deleted tasks temporarily.
 
 `Delete with Files` removes selected tasks from the list and moves their local files, folders, or incomplete temporary files to the macOS Trash.
 
-Downloader first asks Finder to move the files to Trash, so macOS may ask for permission to control Finder. If Finder automation is not available, Downloader falls back to the system workspace trash API.
+Downloader first asks Finder to move the files to Trash, so macOS may ask for permission to control Finder. Files are sent to Finder one path at a time with a short delay, which keeps the trash action closer to normal Finder behavior and avoids overlapping delete sounds. If Finder automation is not available, Downloader falls back to the system workspace trash API.
 
 ## HTTP Segmented Downloads
 
@@ -165,12 +165,19 @@ Completed files are renamed back to their final names.
 
 ## Safari Extension
 
-The project includes a Safari extension target. To test it during development:
+The project includes a native Safari App Extension target. It adds `Download with Downloader` to Safari's link context menu.
+
+To use it:
 
 1. Build and run the app once from Xcode.
 2. Open Safari.
 3. Open `Safari > Settings > Extensions`.
-4. Enable the Downloader extension if it appears.
+4. Enable the Downloader extension.
+5. Open a web page, right-click a download link, then choose `Download with Downloader`.
+
+The Safari context menu path uses the extension and an App Group queue. It does not depend on the `downloader://` URL scheme, so Safari should not repeatedly ask each website for permission to open Downloader.
+
+If the context menu does not appear after changing the extension, restart Safari or disable and re-enable the extension, then reload the page.
 
 If old duplicate extensions appear, clean Xcode DerivedData only when necessary:
 
