@@ -49,7 +49,7 @@ struct DownloadsListView: View {
                             .lineLimit(item.kind == .torrent && (item.status == .downloading || item.status == .completed) ? 2 : 1)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 60, ideal: 120)
+                    .width(min: 30, ideal: 60)
 
                     TableColumn("ETA") { item in
                         Text(item.downloadTimeText)
@@ -58,7 +58,7 @@ struct DownloadsListView: View {
                             .help(item.downloadTimeText)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 50, ideal: 80)
+                    .width(min: 25, ideal: 30)
 
                     TableColumn("Status") { item in
                         Text(item.statusText)
@@ -67,7 +67,7 @@ struct DownloadsListView: View {
                             .help(item.statusText)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 70, ideal: 110)
+                    .width(min: 150, ideal: 260)
                 }
                 .frame(width: max(geometry.size.width, minimumTableWidth))
                 .focusable()

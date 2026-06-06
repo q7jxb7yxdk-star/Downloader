@@ -510,10 +510,14 @@ Current column widths:
 
 ```swift
 Name:   .width(min: 380, ideal: 560)
-Speed:  .width(min: 60, ideal: 120)
-ETA:    .width(min: 50, ideal: 80)
-Status: .width(min: 70, ideal: 110)
+Speed:  .width(min: 30, ideal: 60)
+ETA:    .width(min: 25, ideal: 30)
+Status: .width(min: 150, ideal: 260)
 ```
+
+`Status` receives more horizontal space so BT peer details such as seeds, peers,
+and connection candidates remain visible. `Speed` and `ETA` are narrower
+because their values use compact, predictable formats.
 
 `File Size` is displayed by `DownloadItem.fileSizeText`:
 
@@ -812,4 +816,6 @@ Name progress summary examples:
 0% -
 ```
 
-Error messages can be longer than the column width, so Status text is truncated and the full text is available through tooltip/help.
+The wider Status column displays more BT peer information before truncation.
+Error messages can still exceed the available width, so the full text remains
+available through tooltip/help.
