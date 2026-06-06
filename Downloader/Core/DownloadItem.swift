@@ -71,6 +71,8 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var averageBytesPerSecond: Int64 = 0
     var averageUploadBytesPerSecond: Int64 = 0
     var activeDownloadDuration: TimeInterval = 0
+    /// BT 完成後是否仍在 libtorrent session 內提供上載。
+    var isTorrentSeeding = false
     /// BT 使用：保存使用者選中的 torrent file indexes，方便 App 重開後繼續。
     var selectedTorrentFileIndexes: Set<Int> = []
     /// BT 使用：保存使用者選中的 torrent 內部路徑，雙擊時可打開內容檔案所在資料夾。
@@ -100,6 +102,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         case averageBytesPerSecond
         case averageUploadBytesPerSecond
         case activeDownloadDuration
+        case isTorrentSeeding
         case selectedTorrentFileIndexes
         case selectedTorrentFilePaths
         case isTrashed
@@ -125,6 +128,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         averageBytesPerSecond: Int64 = 0,
         averageUploadBytesPerSecond: Int64 = 0,
         activeDownloadDuration: TimeInterval = 0,
+        isTorrentSeeding: Bool = false,
         selectedTorrentFileIndexes: Set<Int> = [],
         selectedTorrentFilePaths: [String] = [],
         isTrashed: Bool = false,
@@ -147,6 +151,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         self.averageBytesPerSecond = averageBytesPerSecond
         self.averageUploadBytesPerSecond = averageUploadBytesPerSecond
         self.activeDownloadDuration = activeDownloadDuration
+        self.isTorrentSeeding = isTorrentSeeding
         self.selectedTorrentFileIndexes = selectedTorrentFileIndexes
         self.selectedTorrentFilePaths = selectedTorrentFilePaths
         self.isTrashed = isTrashed
@@ -175,6 +180,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         averageBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .averageBytesPerSecond) ?? 0
         averageUploadBytesPerSecond = try container.decodeIfPresent(Int64.self, forKey: .averageUploadBytesPerSecond) ?? 0
         activeDownloadDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .activeDownloadDuration) ?? 0
+        isTorrentSeeding = try container.decodeIfPresent(Bool.self, forKey: .isTorrentSeeding) ?? false
         selectedTorrentFileIndexes = try container.decodeIfPresent(Set<Int>.self, forKey: .selectedTorrentFileIndexes) ?? []
         selectedTorrentFilePaths = try container.decodeIfPresent([String].self, forKey: .selectedTorrentFilePaths) ?? []
         isTrashed = try container.decodeIfPresent(Bool.self, forKey: .isTrashed) ?? false
@@ -196,7 +202,10 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         case .completed where kind == .torrent:
             let downloadText = ByteCountFormatter.string(fromByteCount: averageBytesPerSecond, countStyle: .binary) + "/s"
             let uploadText = ByteCountFormatter.string(fromByteCount: averageUploadBytesPerSecond, countStyle: .binary) + "/s"
-            return "Avg ↓ " + downloadText + "\nAvg ↑ " + uploadText
+            let averageText = "Avg ↓ " + downloadText + "\nAvg ↑ " + uploadText
+            guard isTorrentSeeding, uploadBytesPerSecond > 0 else { return averageText }
+            let currentUploadText = ByteCountFormatter.string(fromByteCount: uploadBytesPerSecond, countStyle: .binary) + "/s"
+            return averageText + "\nNow ↑ " + currentUploadText
         case .completed where averageBytesPerSecond > 0:
             return "Avg " + ByteCountFormatter.string(fromByteCount: averageBytesPerSecond, countStyle: .binary) + "/s"
         default:
@@ -259,9 +268,15 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     ///
     /// `errorMessage` 在這個 App 也用來放補充狀態，例如 BT 的 peer/seed 資訊。
     var statusText: String {
+        if status == .completed, kind == .torrent, isTorrentSeeding, uploadBytesPerSecond > 0 {
+            return "Completed | Seeding"
+        }
+
         if let errorMessage, !errorMessage.isEmpty {
             switch status {
             case .downloading:
+                return errorMessage
+            case .completed where kind == .torrent && isTorrentSeeding:
                 return errorMessage
             case .failed:
                 return "Failed: \(errorMessage)"

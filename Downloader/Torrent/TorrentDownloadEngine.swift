@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 protocol TorrentDownloadEngineDelegate: AnyObject {
     func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64, uploadSpeed: Int64)
+    func updateTorrentSeeding(id: DownloadItem.ID, uploadSpeed: Int64, statusMessage: String)
     func updateStatusText(id: DownloadItem.ID, message: String?)
     func torrentFilesReady(id: DownloadItem.ID, title: String, files: [TorrentFileEntry])
     func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?, averageUploadBytesPerSecond: Int64?, activeDownloadDuration: TimeInterval?)
@@ -42,6 +43,10 @@ final class TorrentDownloadEngine {
     /// 等待使用者選檔案時，不應該把 torrent 判斷為完成或繼續更新速度。
     private var waitingForFileSelectionItemIDs: Set<DownloadItem.ID> = []
 
+    /// 已完成下載並保留在 session 內提供上載的項目。
+    private var completedItemIDs: Set<DownloadItem.ID> = []
+    private var completedPollCountsByTorrentID: [String: Int] = [:]
+
     /// App 重開後 resume 時，從持久化資料帶回之前選過的檔案 index。
     private var selectedFileIndexesByItemID: [DownloadItem.ID: Set<Int>] = [:]
 
@@ -56,7 +61,8 @@ final class TorrentDownloadEngine {
     }
 
     /// 開始 magnet 或 `.torrent` 檔案下載。
-    func start(item: DownloadItem) {
+    @discardableResult
+    func start(item: DownloadItem) -> Bool {
         let folder = item.destination ?? FolderBookmarkStore.fallbackFolder
         let hasSecurityScope = folder.startAccessingSecurityScopedResource()
 
@@ -73,7 +79,7 @@ final class TorrentDownloadEngine {
                 folder.stopAccessingSecurityScopedResource()
             }
             delegate?.fail(id: item.id, errorMessage: error.localizedDescription)
-            return
+            return false
         }
 
         itemIDsByTorrentID[torrentID] = item.id
@@ -81,10 +87,14 @@ final class TorrentDownloadEngine {
         if !item.selectedTorrentFileIndexes.isEmpty {
             selectedFileIndexesByItemID[item.id] = item.selectedTorrentFileIndexes
         }
+        if item.status == .completed {
+            completedItemIDs.insert(item.id)
+        }
         if hasSecurityScope {
             securityScopedFoldersByTorrentID[torrentID] = folder
         }
         startTimerIfNeeded()
+        return true
     }
 
     /// 暫停 torrent。
@@ -104,6 +114,8 @@ final class TorrentDownloadEngine {
         pausedItemIDs.remove(id)
         selectionRequestedItemIDs.remove(id)
         waitingForFileSelectionItemIDs.remove(id)
+        completedItemIDs.remove(id)
+        completedPollCountsByTorrentID[torrentID] = nil
         selectedFileIndexesByItemID[id] = nil
         metadataPollCountsByTorrentID[torrentID] = nil
         payloadTimingsByTorrentID[torrentID] = nil
@@ -111,21 +123,46 @@ final class TorrentDownloadEngine {
     }
 
     /// 繼續 torrent。如果 App 重開後 bridge 裡沒有 torrent，就重新 start。
-    func resume(item: DownloadItem) {
+    @discardableResult
+    func resume(item: DownloadItem) -> Bool {
         guard let torrentID = torrentID(for: item.id) else {
-            start(item: item)
-            return
+            return start(item: item)
         }
         if !item.selectedTorrentFileIndexes.isEmpty {
             selectedFileIndexesByItemID[item.id] = item.selectedTorrentFileIndexes
         }
         pausedItemIDs.remove(item.id)
-        if waitingForFileSelectionItemIDs.contains(item.id) {
+        if item.status == .completed {
+            let selectedIndexes: Set<Int>
+            if !item.selectedTorrentFileIndexes.isEmpty {
+                selectedIndexes = item.selectedTorrentFileIndexes
+            } else {
+                selectedIndexes = Set(
+                    bridge.files(forIdentifier: torrentID).compactMap { dictionary in
+                        (dictionary["index"] as? NSNumber)?.intValue
+                    }
+                )
+            }
+
+            if selectedIndexes.isEmpty {
+                bridge.resume(torrentID)
+            } else {
+                let indexSet = NSMutableIndexSet()
+                for index in selectedIndexes {
+                    indexSet.add(index)
+                }
+                selectedFileIndexesByItemID[item.id] = selectedIndexes
+                selectionRequestedItemIDs.insert(item.id)
+                waitingForFileSelectionItemIDs.remove(item.id)
+                bridge.setSelectedFileIndexes(indexSet as IndexSet, forIdentifier: torrentID)
+            }
+        } else if waitingForFileSelectionItemIDs.contains(item.id) {
             bridge.resumeDiscoveryOnly(torrentID)
         } else {
             bridge.resume(torrentID)
         }
         startTimerIfNeeded()
+        return true
     }
 
     /// 使用者選好 BT 檔案後，把 selected indexes 交給 libtorrent 設定 priority。
@@ -163,8 +200,6 @@ final class TorrentDownloadEngine {
             return
         }
 
-        var completedTorrentIDs: [String] = []
-
         for (torrentID, itemID) in itemIDsByTorrentID {
             guard !pausedItemIDs.contains(itemID) else { continue }
 
@@ -183,6 +218,7 @@ final class TorrentDownloadEngine {
             let peers = (status["peers"] as? NSNumber)?.intValue ?? 0
             let candidates = (status["connectCandidates"] as? NSNumber)?.intValue ?? 0
             let state = status["state"] as? String ?? "Downloading"
+            let isPaused = (status["isPaused"] as? NSNumber)?.boolValue ?? false
 
             if !hasMetadata {
                 let pollCount = (metadataPollCountsByTorrentID[torrentID] ?? 0) + 1
@@ -196,8 +232,6 @@ final class TorrentDownloadEngine {
             }
 
             if hasMetadata && !selectionRequestedItemIDs.contains(itemID) {
-                // metadata 有了才知道 torrent 內有哪些檔案，這時才可以改成 `.tmp` 名稱。
-                bridge.applyTemporaryFileNames(torrentID)
                 let files = bridge.files(forIdentifier: torrentID).compactMap { dictionary -> TorrentFileEntry? in
                     guard let index = (dictionary["index"] as? NSNumber)?.intValue,
                           let path = dictionary["path"] as? String,
@@ -209,7 +243,8 @@ final class TorrentDownloadEngine {
                 }
 
                 if !files.isEmpty {
-                    if let savedIndexes = selectedFileIndexesByItemID[itemID], !savedIndexes.isEmpty {
+                    let savedIndexes = selectedFileIndexesByItemID[itemID]
+                    if let savedIndexes, !savedIndexes.isEmpty {
                         // App 重開後，如果列表裡已經保存了使用者之前選過的檔案，
                         // 就直接套用 selection，不再彈一次選檔視窗。
                         let indexSet = NSMutableIndexSet()
@@ -223,6 +258,17 @@ final class TorrentDownloadEngine {
                         continue
                     }
 
+                    if completedItemIDs.contains(itemID) {
+                        // 舊資料可能沒有保存 file indexes；完成項目重新 seeding 時使用全部檔案。
+                        let allIndexes = IndexSet(files.map(\.index))
+                        selectionRequestedItemIDs.insert(itemID)
+                        bridge.setSelectedFileIndexes(allIndexes, forIdentifier: torrentID)
+                        bridge.reannounce(torrentID)
+                        continue
+                    }
+
+                    // 新下載在 metadata 準備好後才加 `.tmp`，已完成項目不會改名。
+                    bridge.applyTemporaryFileNames(torrentID)
                     selectionRequestedItemIDs.insert(itemID)
                     waitingForFileSelectionItemIDs.insert(itemID)
                     // 等使用者選檔案前，把所有檔案 priority 設成 dont_download。
@@ -241,7 +287,35 @@ final class TorrentDownloadEngine {
                 continue
             }
 
-            if hasMetadata && selectionRequestedItemIDs.contains(itemID) {
+            if completedItemIDs.contains(itemID) {
+                let pollCount = (completedPollCountsByTorrentID[torrentID] ?? 0) + 1
+                completedPollCountsByTorrentID[torrentID] = pollCount
+
+                // 完成項目 Resume 後若 libtorrent 仍處於 paused，主動再次喚醒。
+                if isPaused {
+                    bridge.resume(torrentID)
+                }
+                // 沒有下載者時定期重新 announce，讓 tracker、DHT 和 LSD 更新可連線狀態。
+                if pollCount == 1 || pollCount.isMultiple(of: 40) {
+                    bridge.reannounce(torrentID)
+                }
+
+                delegate?.updateTorrentSeeding(
+                    id: itemID,
+                    uploadSpeed: uploadPayloadSpeed,
+                    statusMessage: completedTorrentStatusMessage(
+                        state: state,
+                        hasMetadata: hasMetadata,
+                        peers: peers,
+                        candidates: candidates
+                    )
+                )
+                continue
+            }
+
+            if hasMetadata
+                && selectionRequestedItemIDs.contains(itemID)
+            {
                 beginPayloadTiming(for: torrentID, received: received, uploaded: uploaded)
             }
 
@@ -261,7 +335,18 @@ final class TorrentDownloadEngine {
                     averageUploadBytesPerSecond: averageSpeeds.upload,
                     activeDownloadDuration: averageSpeeds.duration
                 )
-                completedTorrentIDs.append(torrentID)
+                completedItemIDs.insert(itemID)
+                completedPollCountsByTorrentID[torrentID] = 0
+                delegate?.updateTorrentSeeding(
+                    id: itemID,
+                    uploadSpeed: uploadPayloadSpeed,
+                    statusMessage: completedTorrentStatusMessage(
+                        state: state,
+                        hasMetadata: hasMetadata,
+                        peers: peers,
+                        candidates: candidates
+                    )
+                )
             } else {
                 // 使用 payload speed，而不是總 download_rate，避免 metadata/DHT 流量顯示成下載速度。
                 delegate?.update(
@@ -277,23 +362,6 @@ final class TorrentDownloadEngine {
                     message: torrentStatusMessage(state: state, hasMetadata: hasMetadata, seeds: seeds, peers: peers, candidates: candidates)
                 )
             }
-        }
-
-        for torrentID in completedTorrentIDs {
-            let completedItemID = itemIDsByTorrentID[torrentID]
-            // torrent 已完成後，Swift 層不再需要追蹤這個 libtorrent handle。
-            // 清乾淨可以避免 timer 一直輪詢已完成任務，也釋放 sandbox access。
-            itemIDsByTorrentID[torrentID] = nil
-            saveFoldersByTorrentID[torrentID] = nil
-            metadataPollCountsByTorrentID[torrentID] = nil
-            payloadTimingsByTorrentID[torrentID] = nil
-            if let completedItemID {
-                pausedItemIDs.remove(completedItemID)
-                selectionRequestedItemIDs.remove(completedItemID)
-                waitingForFileSelectionItemIDs.remove(completedItemID)
-                selectedFileIndexesByItemID[completedItemID] = nil
-            }
-            securityScopedFoldersByTorrentID.removeValue(forKey: torrentID)?.stopAccessingSecurityScopedResource()
         }
     }
 
@@ -353,5 +421,19 @@ final class TorrentDownloadEngine {
 
         let displayState = state == "Finding metadata" ? "Preparing selected files" : state
         return "\(displayState) - seeds \(seeds), peers \(peers), candidates \(candidates)"
+    }
+
+    /// 已完成 BT Resume 後的狀態；真正有上載流量時 UI 會改顯示 Seeding。
+    private func completedTorrentStatusMessage(state: String, hasMetadata: Bool, peers: Int, candidates: Int) -> String {
+        if !hasMetadata {
+            return "\(state) - peers \(peers), candidates \(candidates)"
+        }
+
+        switch state {
+        case "Checking", "Starting", "Allocating", "Downloading":
+            return "\(state) - peers \(peers), candidates \(candidates)"
+        default:
+            return "Completed | Waiting for peers - peers \(peers), candidates \(candidates)"
+        }
     }
 }

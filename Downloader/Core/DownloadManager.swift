@@ -23,18 +23,23 @@ final class DownloadManager: NSObject, ObservableObject {
     @Published var torrentFileSelection: TorrentFileSelection?
 
     /// 目前選取項目中是否有可以繼續下載的任務。
-    ///
-    /// 已完成、正在下載、Trash 內的任務都不應該由 Resume 重新開始。
     var canResumeSelected: Bool {
         selectedItems.contains { item in
-            !item.isTrashed && item.status != .downloading && item.status != .completed && item.localFileURL == nil
+            guard !item.isTrashed else { return false }
+            if item.kind == .torrent, item.status == .completed {
+                return !item.isTorrentSeeding
+            }
+            return item.status != .downloading && item.status != .completed && item.localFileURL == nil
         }
     }
 
     /// 目前選取項目中是否有可以暫停的任務。
     var canPauseSelected: Bool {
         selectedItems.contains { item in
-            !item.isTrashed && (item.status == .downloading || item.status == .queued)
+            guard !item.isTrashed else { return false }
+            return item.status == .downloading
+                || item.status == .queued
+                || (item.kind == .torrent && item.status == .completed && item.isTorrentSeeding)
         }
     }
 
@@ -50,6 +55,11 @@ final class DownloadManager: NSObject, ObservableObject {
         super.init()
         // App 啟動時先載入上次保存的任務列表。
         items = store.load()
+        // libtorrent session 不會跨 App process 保存；重開 App 後由使用者按 Resume 重新開始 seeding。
+        for index in items.indices where items[index].kind == .torrent && items[index].status == .completed {
+            items[index].isTorrentSeeding = false
+            items[index].uploadBytesPerSecond = 0
+        }
     }
 
     /// 新增一個下載任務，並立即開始下載。
@@ -128,7 +138,14 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// 暫停目前選中的任務。
     func pauseSelected() {
-        for item in selectedItems where !item.isTrashed && (item.status == .downloading || item.status == .queued) {
+        for item in selectedItems where !item.isTrashed {
+            if item.kind == .torrent, item.status == .completed, item.isTorrentSeeding {
+                torrentEngine.pause(id: item.id)
+                setTorrentSeeding(id: item.id, isSeeding: false)
+                continue
+            }
+
+            guard item.status == .downloading || item.status == .queued else { continue }
             switch item.kind {
             case .http:
                 httpEngine.pause(id: item.id)
@@ -141,7 +158,15 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// 繼續目前選中的任務。
     func resumeSelected() {
-        for item in selectedItems where !item.isTrashed && item.status != .completed && item.status != .downloading && item.localFileURL == nil {
+        for item in selectedItems where !item.isTrashed {
+            if item.kind == .torrent, item.status == .completed, !item.isTorrentSeeding {
+                if torrentEngine.resume(item: item) {
+                    setTorrentSeeding(id: item.id, isSeeding: true)
+                }
+                continue
+            }
+
+            guard item.status != .completed && item.status != .downloading && item.localFileURL == nil else { continue }
             mark(id: item.id, status: .queued)
 
             switch item.kind {
@@ -178,7 +203,9 @@ final class DownloadManager: NSObject, ObservableObject {
         for item in itemsToDelete where !item.isTrashed {
             guard let index = items.firstIndex(where: { $0.id == item.id }) else { continue }
 
-            if item.status == .downloading || item.status == .queued {
+            if item.status == .downloading
+                || item.status == .queued
+                || (item.kind == .torrent && item.status == .completed && item.isTorrentSeeding) {
                 switch item.kind {
                 case .http:
                     httpEngine.pause(id: item.id)
@@ -191,6 +218,7 @@ final class DownloadManager: NSObject, ObservableObject {
             items[index].isTrashed = true
             items[index].bytesPerSecond = 0
             items[index].uploadBytesPerSecond = 0
+            items[index].isTorrentSeeding = false
             if item.status == .downloading || item.status == .queued {
                 items[index].status = .paused
             }
@@ -346,6 +374,7 @@ final class DownloadManager: NSObject, ObservableObject {
     ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         guard !items[index].isTrashed else { return }
+        let wasAlreadyCompleted = items[index].status == .completed
         let finalReceived = received ?? items[index].bytesReceived
         let finalExpected = expected ?? items[index].bytesExpected
         let elapsed = max(Date().timeIntervalSince(items[index].createdAt), 1)
@@ -357,13 +386,33 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].bytesExpected = max(items[index].bytesExpected, finalExpected, completedBytes)
         items[index].bytesPerSecond = 0
         items[index].uploadBytesPerSecond = 0
-        items[index].averageBytesPerSecond = averageBytesPerSecond ?? (completedBytes > 0 ? Int64(Double(completedBytes) / elapsed) : 0)
-        items[index].averageUploadBytesPerSecond = averageUploadBytesPerSecond ?? 0
-        items[index].activeDownloadDuration = activeDownloadDuration ?? elapsed
+        if !wasAlreadyCompleted {
+            items[index].averageBytesPerSecond = averageBytesPerSecond ?? (completedBytes > 0 ? Int64(Double(completedBytes) / elapsed) : 0)
+            items[index].averageUploadBytesPerSecond = averageUploadBytesPerSecond ?? 0
+            items[index].activeDownloadDuration = activeDownloadDuration ?? elapsed
+        }
+        items[index].isTorrentSeeding = items[index].kind == .torrent
         items[index].localFileURL = fileURL
         items[index].errorMessage = nil
-        NotificationManager.shared.downloadDidFinish(name: items[index].name)
+        if !wasAlreadyCompleted {
+            NotificationManager.shared.downloadDidFinish(name: items[index].name)
+        }
         store.save(items)
+    }
+
+    /// 已完成 BT 的 libtorrent session 回報目前上載速度。
+    func updateTorrentSeeding(id: DownloadItem.ID, uploadSpeed: Int64, statusMessage: String) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        guard !items[index].isTrashed,
+              items[index].kind == .torrent,
+              items[index].status == .completed,
+              items[index].isTorrentSeeding
+        else { return }
+
+        items[index].bytesPerSecond = 0
+        items[index].uploadBytesPerSecond = uploadSpeed
+        items[index].errorMessage = uploadSpeed > 0 ? nil : statusMessage
+        scheduleSave()
     }
 
     /// 在 Finder 顯示下載項目。
@@ -440,6 +489,21 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].errorMessage = nil
         items[index].bytesPerSecond = 0
         items[index].uploadBytesPerSecond = 0
+        items[index].isTorrentSeeding = false
+        store.save(items)
+    }
+
+    private func setTorrentSeeding(id: DownloadItem.ID, isSeeding: Bool) {
+        guard let index = items.firstIndex(where: { $0.id == id }),
+              items[index].kind == .torrent,
+              items[index].status == .completed
+        else { return }
+
+        items[index].isTorrentSeeding = isSeeding
+        if !isSeeding {
+            items[index].uploadBytesPerSecond = 0
+        }
+        items[index].errorMessage = isSeeding ? "Starting" : nil
         store.save(items)
     }
 

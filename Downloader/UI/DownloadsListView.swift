@@ -46,7 +46,8 @@ struct DownloadsListView: View {
                         // monospacedDigit 讓速度數字跳動時欄位比較穩定。
                         Text(item.speedText)
                             .monospacedDigit()
-                            .lineLimit(item.kind == .torrent && (item.status == .downloading || item.status == .completed) ? 2 : 1)
+                            .lineLimit(item.kind == .torrent && item.status == .completed && item.isTorrentSeeding && item.uploadBytesPerSecond > 0 ? 3 : (item.kind == .torrent && (item.status == .downloading || item.status == .completed) ? 2 : 1))
+                            .frame(minHeight: item.kind == .torrent && item.status == .completed && item.isTorrentSeeding && item.uploadBytesPerSecond > 0 ? 48 : 0, alignment: .leading)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
                     .width(min: 30, ideal: 60)
@@ -240,7 +241,10 @@ private extension View {
                     } label: {
                         Label("Resume", systemImage: "play.fill")
                     }
-                    .disabled(item.status == .downloading || item.status == .completed)
+                    .disabled(
+                        item.status == .downloading
+                            || (item.status == .completed && (item.kind != .torrent || item.isTorrentSeeding))
+                    )
 
                     Button {
                         // 如果右鍵點中的項目已經在 selection 裡，這行會保留原本多選。
@@ -249,7 +253,11 @@ private extension View {
                     } label: {
                         Label("Pause", systemImage: "pause.fill")
                     }
-                    .disabled(item.status != .downloading && item.status != .queued)
+                    .disabled(
+                        item.status != .downloading
+                            && item.status != .queued
+                            && !(item.kind == .torrent && item.status == .completed && item.isTorrentSeeding)
+                    )
 
                     Divider()
                 }

@@ -12,7 +12,8 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - Torrent file selection after metadata is available.
 - Incomplete files are written directly to the selected download folder.
 - HTTP incomplete files use `.part-N.tmp`; BT incomplete files use `.tmp`.
-- Completed downloads show average download speed. BT downloads also show upload speed.
+- Completed BT downloads continue seeding until paused or removed.
+- Completed BT downloads show average download/upload speeds and the current seeding upload speed.
 - Double-click a completed item to reveal it in Finder.
 - Downloads table shows name, progress, percentage, downloaded size / total size, speed, ETA, and status.
 - While downloading, ETA shows the estimated remaining time. After completion, it shows the accumulated active download time, excluding paused time.
@@ -109,6 +110,14 @@ https://ash-speed.hetzner.com/100MB.bin
 - Shift-click: range-select.
 - Double-click: show downloaded location in Finder.
 - Right-click: Resume, Pause, Show in Finder, Delete, Delete with Files.
+
+For a completed BT download:
+
+- Pause stops seeding while keeping the task completed.
+- Resume starts seeding again without repeating the completion notification.
+- Resume may briefly show `Starting`, `Checking`, or `Finding metadata`.
+- Status shows `Completed | Waiting for peers` while the torrent is ready but no payload is being uploaded.
+- Status shows `Completed | Seeding` only while payload is actively being uploaded, and `Completed` while paused.
 
 ### Trash
 

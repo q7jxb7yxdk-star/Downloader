@@ -317,6 +317,51 @@ Avg ↓ 12.4 MiB/s
 Avg ↑ 512 KiB/s
 ```
 
+The completed torrent remains in the libtorrent session and continues seeding.
+While seeding, the Speed column adds the current upload speed:
+
+```text
+Avg ↓ 12.4 MiB/s
+Avg ↑ 512 KiB/s
+Now ↑ 128 KiB/s
+```
+
+The Status column shows:
+
+```text
+Completed | Seeding
+```
+
+Pause keeps the item in the Completed category, stops the torrent session, and
+removes the current upload-speed line. Resume starts seeding again. The original
+average speeds and active download duration are not recalculated, and the
+completion notification is not sent again.
+
+`DownloadItem.isTorrentSeeding` records whether the completed BT item currently
+has an enabled seeding session. It does not mean payload is currently being
+uploaded. The Status column reflects the current libtorrent state:
+
+```text
+Starting
+Checking - peers 0, candidates 4
+Finding metadata - peers 2, candidates 6
+Completed | Waiting for peers - peers 0, candidates 3
+Completed | Seeding
+```
+
+`Completed | Seeding` is shown only when `upload_payload_rate` is greater than
+zero. A ready torrent with no requesting peer shows
+`Completed | Waiting for peers` instead.
+
+When a completed torrent resumes, Downloader reapplies the saved file
+priorities. Older tasks without saved indexes use all torrent files. Polling
+also checks libtorrent's paused flag and wakes the handle again when necessary.
+While waiting for peers, Downloader reannounces to trackers, DHT, and LSD every
+10 seconds.
+
+Because a libtorrent handle cannot survive an app process restart, completed BT
+items load as non-seeding and can be restarted with Resume.
+
 ## File Naming
 
 HTTP incomplete:

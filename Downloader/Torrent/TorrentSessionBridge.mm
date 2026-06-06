@@ -380,6 +380,7 @@ namespace lt = libtorrent;
             @"totalWantedDone": @0,
             @"isFinished": @NO,
             @"hasMetadata": @NO,
+            @"isPaused": @NO,
             @"seeds": @0,
             @"peers": @0,
             @"state": @"Invalid"
@@ -387,6 +388,7 @@ namespace lt = libtorrent;
     }
 
     lt::torrent_status status = found->second.status();
+    bool isPaused = static_cast<bool>(status.flags & lt::torrent_flags::paused);
     NSString *stateName = @"Downloading";
     // Convert libtorrent enum values to readable strings for Swift UI.
     switch (status.state) {
@@ -426,6 +428,7 @@ namespace lt = libtorrent;
         @"totalWantedDone": @((long long)status.total_wanted_done),
         @"isFinished": @(status.is_finished),
         @"hasMetadata": @(status.has_metadata),
+        @"isPaused": @(isPaused),
         @"seeds": @(status.num_seeds),
         @"peers": @(status.num_peers),
         @"connectCandidates": @(status.connect_candidates),

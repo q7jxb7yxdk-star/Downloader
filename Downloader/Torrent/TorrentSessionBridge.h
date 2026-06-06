@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSDictionary<NSString *, id> *> *)filesForIdentifier:(NSString *)identifier;
 /// Applies selected file priorities and starts real payload download.
 - (void)setSelectedFileIndexes:(NSIndexSet *)indexes forIdentifier:(NSString *)identifier;
-/// Returns a dictionary snapshot of torrent status for Swift polling.
+/// Returns a dictionary snapshot of torrent status, including paused state, for Swift polling.
 - (NSDictionary<NSString *, id> *)statusForIdentifier:(NSString *)identifier;
 @end
 
