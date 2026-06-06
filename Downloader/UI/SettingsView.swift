@@ -1,9 +1,13 @@
 import SwiftUI
 
 /// App 設定畫面。
-///
-/// 這兩個設定目前先保存到 UserDefaults，作為之後實作全域下載佇列和限速功能的基礎。
 struct SettingsView: View {
+    private static let sharedDefaults = UserDefaults(suiteName: "group.com.sunnyyu.Downloader") ?? .standard
+
+    /// Safari native extension 透過 App Group 讀取同一個設定。
+    @AppStorage("automaticallyCaptureSafariDownloads", store: sharedDefaults)
+    private var automaticallyCaptureSafariDownloads = true
+
     /// 預計用來限制同時下載任務數。
     @AppStorage("maxConcurrentDownloads") private var maxConcurrentDownloads = 3
 
@@ -12,6 +16,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Toggle("Automatically capture downloads from Safari", isOn: $automaticallyCaptureSafariDownloads)
             Stepper("Concurrent downloads: \(maxConcurrentDownloads)", value: $maxConcurrentDownloads, in: 1...12)
             Stepper("Speed limit: \(speedLimitKBps == 0 ? "Unlimited" : "\(speedLimitKBps) KB/s")", value: $speedLimitKBps, in: 0...100_000, step: 100)
         }

@@ -63,18 +63,28 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     /// 新增一個下載任務，並立即開始下載。
-    func add(url: URL, destination: URL?) {
+    func add(url: URL, destination: URL?, kind requestedKind: DownloadKind? = nil) {
         // 用 URL 形式判斷下載類型：magnet 和 .torrent 交給 BT engine，其他交給 HTTP。
-        let kind: DownloadKind = url.absoluteString.hasPrefix("magnet:") || url.pathExtension.lowercased() == "torrent" ? .torrent : .http
-        let item = DownloadItem(
+        let kind: DownloadKind = requestedKind
+            ?? (url.absoluteString.hasPrefix("magnet:") || url.pathExtension.lowercased() == "torrent" ? .torrent : .http)
+        var item = DownloadItem(
             name: Self.displayName(for: url),
             source: url,
             destination: destination,
             kind: kind
         )
+        if kind == .torrent, !url.isFileURL, !url.absoluteString.hasPrefix("magnet:") {
+            item.status = .downloading
+            item.errorMessage = "Downloading torrent metadata"
+        }
         items.insert(item, at: 0)
         selectedItemIDs = [item.id]
         store.save(items)
+
+        if kind == .torrent, !url.isFileURL, !url.absoluteString.hasPrefix("magnet:") {
+            downloadRemoteTorrentMetadata(for: item.id, from: url)
+            return
+        }
 
         // DownloadManager 只決定「交給誰」，真正下載細節留給各 engine。
         switch kind {
@@ -173,7 +183,65 @@ final class DownloadManager: NSObject, ObservableObject {
             case .http:
                 httpEngine.resume(item: item)
             case .torrent:
-                torrentEngine.resume(item: item)
+                if !item.source.isFileURL,
+                   !item.source.absoluteString.hasPrefix("magnet:"),
+                   item.source.pathExtension.lowercased() == "torrent" {
+                    mark(id: item.id, status: .downloading, errorMessage: "Downloading torrent metadata")
+                    downloadRemoteTorrentMetadata(for: item.id, from: item.source)
+                } else {
+                    torrentEngine.resume(item: item)
+                }
+            }
+        }
+    }
+
+    /// 下載遠端 `.torrent` metadata，保存到 Application Support 後再交給 libtorrent。
+    private func downloadRemoteTorrentMetadata(for itemID: DownloadItem.ID, from remoteURL: URL) {
+        Task {
+            do {
+                let (data, response) = try await URLSession.shared.data(from: remoteURL)
+                if let httpResponse = response as? HTTPURLResponse,
+                   !(200...299).contains(httpResponse.statusCode) {
+                    throw NSError(
+                        domain: "Downloader.TorrentMetadata",
+                        code: httpResponse.statusCode,
+                        userInfo: [NSLocalizedDescriptionKey: "Server returned HTTP \(httpResponse.statusCode)."]
+                    )
+                }
+                guard !data.isEmpty else {
+                    throw NSError(
+                        domain: "Downloader.TorrentMetadata",
+                        code: 0,
+                        userInfo: [NSLocalizedDescriptionKey: "The torrent metadata file is empty."]
+                    )
+                }
+
+                let supportDirectory = FileManager.default.urls(
+                    for: .applicationSupportDirectory,
+                    in: .userDomainMask
+                )[0]
+                    .appending(path: "Downloader/TorrentMetadata", directoryHint: .isDirectory)
+                try FileManager.default.createDirectory(
+                    at: supportDirectory,
+                    withIntermediateDirectories: true
+                )
+                let localURL = supportDirectory.appending(
+                    path: "\(itemID.uuidString).torrent",
+                    directoryHint: .notDirectory
+                )
+                try data.write(to: localURL, options: .atomic)
+
+                guard let index = items.firstIndex(where: { $0.id == itemID }),
+                      !items[index].isTrashed
+                else { return }
+
+                items[index].source = localURL
+                items[index].status = .queued
+                items[index].errorMessage = nil
+                store.save(items)
+                torrentEngine.start(item: items[index])
+            } catch {
+                fail(id: itemID, errorMessage: error.localizedDescription)
             }
         }
     }

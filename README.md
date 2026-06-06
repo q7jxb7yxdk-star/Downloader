@@ -8,7 +8,7 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - HTTP Range segmented downloads with 4 concurrent connections for supported large files.
 - Pause, resume, delete, trash, and restore download tasks.
 - Magnet and BT downloads through bundled libtorrent.
-- `.torrent` file import.
+- Local and remote `.torrent` file import.
 - Torrent file selection after metadata is available.
 - Incomplete files are written directly to the selected download folder.
 - HTTP incomplete files use `.part-N.tmp`; BT incomplete files use `.tmp`.
@@ -19,7 +19,7 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - While downloading, ETA shows the estimated remaining time. After completion, it shows the accumulated active download time, excluding paused time.
 - Right-click actions: Resume, Pause, Show in Finder, Delete, Delete with Files.
 - Download completion notification and system sound.
-- Native Safari App Extension with a `Download with Downloader` link context menu.
+- Native Safari App Extension with automatic direct-download capture and a `Download with Downloader` link context menu.
 
 ## Requirements
 
@@ -103,6 +103,9 @@ https://ash-speed.hetzner.com/100MB.bin
 3. Select a `.torrent` file.
 4. Choose which files to download.
 
+A direct web link ending in `.torrent` can also be added from Safari. Downloader
+first saves the torrent metadata locally, then opens the BT file-selection flow.
+
 ### List Actions
 
 - Single-click: select one item.
@@ -174,7 +177,9 @@ Completed files are renamed back to their final names.
 
 ## Safari Extension
 
-The project includes a native Safari App Extension target. It adds `Download with Downloader` to Safari's link context menu.
+The project includes a native Safari App Extension target. It automatically
+captures explicit download links and also adds `Download with Downloader` to
+Safari's link context menu.
 
 To use it:
 
@@ -182,11 +187,31 @@ To use it:
 2. Open Safari.
 3. Open `Safari > Settings > Extensions`.
 4. Enable the Downloader extension.
-5. Open a web page, right-click a download link, then choose `Download with Downloader`.
+5. Allow the extension access to all websites.
+6. Reload the web page, then click a direct file, magnet, or `.torrent` link.
 
-The Safari context menu path uses the extension and an App Group queue. It does not depend on the `downloader://` URL scheme, so Safari should not repeatedly ask each website for permission to open Downloader.
+Automatic capture is enabled by default and can be changed in Downloader
+Settings. It recognizes links with a `download` attribute, magnet links, and
+common file extensions. Torrent buttons and links can also be recognized from
+their MIME type, filename, label, or torrent-related data attributes, even when
+the endpoint URL does not end in `.torrent`. Ambiguous `/file/` and `/download`
+links are checked with a one-byte Range request; Downloader captures the link
+only when its response headers identify a Torrent file. Dynamic downloads
+created entirely by JavaScript, authenticated POST requests, or `blob:` URLs
+may still require Safari's own download flow.
 
-If the context menu does not appear after changing the extension, restart Safari or disable and re-enable the extension, then reload the page.
+The Safari extension sends download URLs through an App Group queue. The
+extension launches its containing Downloader app directly. The
+`downloader://authorize` URL is retained only as a fallback and does not carry
+the download URL.
+
+Downloader also registers the `.torrent` document type with macOS. Opening a
+downloaded torrent file from Finder therefore launches Downloader and begins
+the BT file-selection flow.
+
+If automatic capture or the context menu does not work after changing the
+extension, confirm that website access is allowed, restart Safari or disable
+and re-enable the extension, then reload the page.
 
 If old duplicate extensions appear, clean Xcode DerivedData only when necessary:
 

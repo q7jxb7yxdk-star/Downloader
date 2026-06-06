@@ -30,7 +30,7 @@ UI 不直接操作 `URLSession` 或 libtorrent。畫面只呼叫 `DownloadManage
 | Bridge | `Downloader/Torrent/TorrentSessionBridge.h/.mm` | Objective-C++ wrapper around C++ libtorrent |
 | Persistence | `Downloader/Persistence/*.swift` | JSON task storage and security-scoped folder bookmarks |
 | Notifications | `Downloader/Notifications/NotificationManager.swift` | Completion notification and sound |
-| Safari Extension | `Downloader Safari Extension/*` | Native Safari context menu handoff |
+| Safari Extension | `Downloader Safari Extension/*` | Automatic direct-download capture and context menu handoff |
 | Browser Fallback | `Downloader/BrowserIntegration/URLSchemeHandler.swift` | Custom URL scheme parsing |
 
 ## DownloadItem
@@ -103,6 +103,17 @@ Meaning:
 - `magnet:?xt=...` uses BT.
 - `.torrent` uses BT.
 - Everything else uses HTTP.
+
+For a remote HTTP/HTTPS URL ending in `.torrent`, `DownloadManager` first
+downloads the metadata to:
+
+```text
+~/Library/Application Support/Downloader/TorrentMetadata/<item-id>.torrent
+```
+
+The item's source is then replaced with that local file URL before
+`TorrentDownloadEngine.start(item:)` calls libtorrent. This avoids passing an
+HTTP URL to `startMagnet`.
 
 ### Progress Save Throttling
 
@@ -698,7 +709,8 @@ The checkbox uses `Binding<Bool>` because each toggle needs true/false, while th
 
 ## Safari Extension and URL Handoff
 
-Downloader currently uses a native Safari App Extension for right-click downloads.
+Downloader uses a native Safari App Extension for automatic direct-download
+capture and right-click downloads.
 
 ```text
 Downloader Safari Extension/Info.plist
@@ -706,6 +718,50 @@ Downloader Safari Extension/Resources/content.js
 Downloader Safari Extension/SafariWebExtensionHandler.swift
 Downloader/UI/ContentView.swift
 ```
+
+### Automatic Capture
+
+`SettingsView` stores `automaticallyCaptureSafariDownloads` in the shared App
+Group `UserDefaults`. It defaults to enabled.
+
+When a page loads, `content.js` uses
+`safari.extension.dispatchMessage(...)` to ask the native extension handler for
+the setting. If enabled, the capture-phase click listener recognizes:
+
+- Links with a `download` attribute.
+- `magnet:` links.
+- HTTP/HTTPS links ending in common downloadable file extensions, including
+  `.torrent`.
+- Torrent links and buttons identified by `application/x-bittorrent`, a
+  `.torrent` filename, torrent labels, or torrent-related data attributes.
+
+Eligible clicks are cancelled before Safari starts its own navigation, then sent
+to `SafariWebExtensionHandler` with the `auto-capture-download` message through
+the same injected-script messaging API. The message includes an explicit
+`torrent` kind when the page identifies a torrent whose endpoint URL has no
+`.torrent` suffix.
+
+Ambiguous HTTP/HTTPS endpoints whose path contains `/file/` or `/download` use
+the `probe-download` message. The native extension sends a GET request with:
+
+```http
+Range: bytes=0-0
+```
+
+It checks `Content-Type` and `Content-Disposition` without downloading the
+whole file. A `.torrent` filename or `application/x-bittorrent` response is
+queued as BT and opens Downloader. Otherwise `download-probe-result` tells the
+injected script to continue the original Safari navigation. The probe has a
+10-second timeout.
+
+Because the probe runs inside the sandboxed Safari App Extension, the extension
+entitlements include `com.apple.security.network.client`. Probe failures and
+response status/header details are logged through `os_log` for diagnosis.
+
+This deliberately does not intercept every link. Downloads generated through
+JavaScript, forms, authenticated POST requests, or `blob:` URLs cannot be
+reconstructed safely from a normal anchor URL and should use Safari or the
+right-click fallback.
 
 ### Native Context Menu Flow
 
@@ -727,7 +783,9 @@ document.addEventListener("contextmenu", (event) => {
 }, false);
 ```
 
-When the user chooses `Download with Downloader`, `SafariWebExtensionHandler.contextMenuItemSelected(...)`:
+Automatic capture and `Download with Downloader` both call the same queue
+method. Queue entries contain the URL and an optional download kind; the reader
+also accepts the previous string-only queue format. `SafariWebExtensionHandler`:
 
 1. Reads `userInfo["url"]`.
 2. Appends the link to the App Group file:
@@ -752,6 +810,11 @@ The main app listens in `ContentView`, then `flushPendingSafariDownloads()`:
 4. Adds each valid URL using the last selected download folder.
 5. Brings Downloader to the foreground.
 
+The extension derives the containing `Downloader.app` URL from its `.appex`
+bundle path and calls `NSWorkspace.openApplication`. If that fails, it falls
+back to `downloader://authorize`. The actual download URL remains in the App
+Group queue.
+
 ### URL Scheme Fallback
 
 Downloader still contains the custom URL scheme parser:
@@ -768,7 +831,19 @@ downloader://add?url=https%3A%2F%2Fexample.com%2Ffile.zip
 
 `URLComponents` parses the query string, extracts `url`, and converts it back to `URL`.
 
-Safari's `Download with Downloader` context menu no longer uses this path. That avoids Safari repeatedly asking each website whether it can open Downloader through the URL scheme.
+Safari download URLs do not travel through this path. This avoids putting the
+source URL in a custom-scheme navigation; only the fixed `authorize` URL is used
+to activate Downloader.
+
+### `.torrent` Document Registration
+
+`Downloader/Info.plist` registers `org.bittorrent.torrent`, the `.torrent`
+filename extension, and `application/x-bittorrent`. Finder and LaunchServices
+can therefore launch Downloader with a local torrent file. `AppDelegate` passes
+the file URL to `ContentView`, which starts the normal BT import flow.
+
+Safari must grant the extension website access before `content.js` can run.
+After changing the extension or its permission, reload the affected page.
 
 Safari Extension development can leave stale extension builds in DerivedData. Clean only when Safari shows duplicate or old extensions:
 

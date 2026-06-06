@@ -131,6 +131,13 @@ struct ContentView: View {
 
     /// 處理 Safari / URL scheme 傳入的外部 URL。
     private func handleExternalURL(_ incomingURL: URL) {
+        if incomingURL.isFileURL, incomingURL.pathExtension.lowercased() == "torrent" {
+            let destination = FolderBookmarkStore.lastFolder()
+            downloadManager.add(url: incomingURL, destination: destination)
+            bringDownloaderToFront()
+            return
+        }
+
         guard incomingURL.scheme == URLSchemeHandler.scheme else { return }
 
         // `downloader://authorize` 只用來讓 Safari 完成「允許開啟 Downloader」授權。
@@ -148,27 +155,42 @@ struct ContentView: View {
     /// 讀取 Safari native extension 寫入 App Group 的下載 queue。
     @discardableResult
     private func flushPendingSafariDownloads() -> Bool {
+        struct PendingSafariDownload: Codable {
+            let url: String
+            let kind: String?
+        }
+
         let appGroupIdentifier = "group.com.sunnyyu.Downloader"
         let queueFileName = "pending-safari-downloads.json"
 
         guard let queueURL = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?
             .appendingPathComponent(queueFileName),
-              let data = try? Data(contentsOf: queueURL),
-              let links = try? JSONDecoder().decode([String].self, from: data),
-              !links.isEmpty
+              let data = try? Data(contentsOf: queueURL)
         else {
             return false
         }
 
-        if let emptyQueue = try? JSONEncoder().encode([String]()) {
+        let downloads: [PendingSafariDownload]
+        if let queuedDownloads = try? JSONDecoder().decode([PendingSafariDownload].self, from: data) {
+            downloads = queuedDownloads
+        } else if let legacyLinks = try? JSONDecoder().decode([String].self, from: data) {
+            downloads = legacyLinks.map { PendingSafariDownload(url: $0, kind: nil) }
+        } else {
+            return false
+        }
+
+        guard !downloads.isEmpty else { return false }
+
+        if let emptyQueue = try? JSONEncoder().encode([PendingSafariDownload]()) {
             try? emptyQueue.write(to: queueURL, options: .atomic)
         }
 
         let destination = FolderBookmarkStore.lastFolder()
-        for link in links {
-            guard let url = URL(string: link) else { continue }
-            downloadManager.add(url: url, destination: destination)
+        for download in downloads {
+            guard let url = URL(string: download.url) else { continue }
+            let kind = download.kind.flatMap(DownloadKind.init(rawValue:))
+            downloadManager.add(url: url, destination: destination, kind: kind)
         }
 
         bringDownloaderToFront()
