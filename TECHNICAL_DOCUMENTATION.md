@@ -64,8 +64,11 @@ Important fields:
 - `isTrashed`: soft-delete flag.
 - `statusBeforeTrash`: original status used when restoring from Trash.
 - `errorMessage`: error text, also reused for status details such as seeds/peers.
+- `httpConnectionDetails`: transient HTTP connection progress used by the table UI.
 
 `DownloadItem` has a custom `Codable` decoder so older `downloads.json` files can still load after new fields are added.
+`httpConnectionDetails` is intentionally excluded from `CodingKeys`, so live
+connection rows are never written to `downloads.json`.
 
 ## DownloadManager
 
@@ -273,6 +276,12 @@ the download. Completed bytes remain in place, queued segments wait for an
 available connection slot, and failed segments resume from their first missing
 byte.
 
+The HTTP connection details sent to the table are limited to the current active
+connection limit. Active segments are shown first, followed by unfinished
+segments. Display labels are renumbered as `Thread 1`, `Thread 2`, and so on,
+so a server reduced to two connections shows two rows instead of four inactive
+rows.
+
 ### Pause and Resume
 
 Single connection resume:
@@ -287,6 +296,12 @@ Segmented resume:
 - Each part knows its original byte range.
 - Each part resumes from `range.lowerBound + received`.
 - Only unfinished parts create new requests.
+- Pausing clears cancelled task identifiers from the active connection-slot set.
+- Resuming also resets the in-memory slot set before queuing replacement tasks.
+
+Clearing these slots does not remove segment files or downloaded bytes. It
+prevents cancelled callbacks from leaving apparently occupied slots that would
+otherwise stop resumed requests from starting.
 
 ### Speed Calculation
 
@@ -602,7 +617,7 @@ TableColumn("Status")
 Column widths use:
 
 ```swift
-.width(min: 380, ideal: 560)
+.width(min: 520, ideal: 720)
 ```
 
 Meaning:
@@ -613,8 +628,8 @@ Meaning:
 Current column widths:
 
 ```swift
-Name:   .width(min: 380, ideal: 560)
-Speed:  .width(min: 30, ideal: 60)
+Name:   .width(min: 520, ideal: 720)
+Speed:  .width(min: 53, ideal: 99)
 ETA:    .width(min: 25, ideal: 30)
 Status: .width(min: 150, ideal: 260)
 ```
@@ -622,6 +637,17 @@ Status: .width(min: 150, ideal: 260)
 `Status` receives more horizontal space so BT peer details such as seeds, peers,
 and connection candidates remain visible. `Speed` and `ETA` are narrower
 because their values use compact, predictable formats.
+
+The minimum table width is `1100` points. Active HTTP rows expand below the
+overall progress summary:
+
+- The Name column shows each visible Thread's progress, percentage, and
+  transferred size / segment size.
+- The Speed column shows `Total` followed by the corresponding per-Thread
+  speeds.
+- Thread labels appear only in the Name column; Speed values are left-aligned
+  to keep the narrow Speed column compact.
+- Completed HTTP downloads collapse back to the normal single-row display.
 
 `File Size` is displayed by `DownloadItem.fileSizeText`:
 
@@ -956,6 +982,10 @@ Most of these are system logs, not app bugs.
 | --- | --- | --- |
 | `DetachedSignatures` | macOS signature database lookup | No |
 | `Unable to obtain a task name port right` | debugger/system permission limitation | No |
+| `nw_path_necp_check_for_updates Failed to copy updated result (22)` | Network.framework path-update diagnostic | Only investigate if networking fails |
+| `FSFindFolder failed with error=-43` | a system component could not find an expected folder | Usually no |
+| `Rule path is not accessible: /var/protected/xprotect/...` | protected XProtect rule path is inaccessible to the app | No |
+| `Error reading rules: (null)` | accompanying XProtect/system rule-reader diagnostic | No |
 | `nw_endpoint_flow_failed_with_error 127.0.0.1` | local loopback connection log | Only investigate if downloads fail |
 | `ViewBridge to RemoteViewService Terminated` | system panel or remote view closed | No |
 | `NSXPCDecoder validateAllowedClass` | Apple framework secure coding warning | Usually no |

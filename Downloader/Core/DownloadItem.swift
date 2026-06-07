@@ -46,6 +46,22 @@ enum DownloadStatus: String, Codable {
     }
 }
 
+/// HTTP 下載中單一連線的即時狀態。
+///
+/// 這些資料只用於 UI，不會寫入 `downloads.json`。
+struct HTTPConnectionDetail: Identifiable, Hashable {
+    let id: Int
+    let title: String
+    var bytesReceived: Int64
+    let bytesExpected: Int64
+    var bytesPerSecond: Int64
+
+    var progress: Double {
+        guard bytesExpected > 0 else { return 0 }
+        return min(max(Double(bytesReceived) / Double(bytesExpected), 0), 1)
+    }
+}
+
 /// 一個下載任務的完整資料模型。
 ///
 /// 這個 struct 同時服務三個地方：
@@ -84,6 +100,8 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     /// 失敗訊息；下載中也借用它顯示補充狀態，例如 seeds/peers。
     var errorMessage: String?
     var createdAt = Date()
+    /// HTTP 各連線的即時進度；刻意不加入 CodingKeys。
+    var httpConnectionDetails: [HTTPConnectionDetail] = []
 
     /// 明確列出 CodingKeys，方便日後新增欄位時保持向下兼容。
     enum CodingKeys: String, CodingKey {
@@ -134,7 +152,8 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         isTrashed: Bool = false,
         statusBeforeTrash: DownloadStatus? = nil,
         errorMessage: String? = nil,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        httpConnectionDetails: [HTTPConnectionDetail] = []
     ) {
         self.id = id
         self.name = name
@@ -158,6 +177,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         self.statusBeforeTrash = statusBeforeTrash
         self.errorMessage = errorMessage
         self.createdAt = createdAt
+        self.httpConnectionDetails = httpConnectionDetails
     }
 
     /// 自訂解碼器的目的，是讓舊版本保存的 JSON 缺少新欄位時仍能讀取。
@@ -187,6 +207,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         statusBeforeTrash = try container.decodeIfPresent(DownloadStatus.self, forKey: .statusBeforeTrash)
         errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        httpConnectionDetails = []
     }
 
     /// 列表中顯示的速度文字。

@@ -6,6 +6,7 @@ import Foundation
 @MainActor
 protocol HTTPDownloadEngineDelegate: AnyObject {
     func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64, uploadSpeed: Int64)
+    func updateHTTPConnections(id: DownloadItem.ID, connections: [HTTPConnectionDetail])
     func updateStatusText(id: DownloadItem.ID, message: String?)
     func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?, averageUploadBytesPerSecond: Int64?, activeDownloadDuration: TimeInterval?)
     func fail(id: DownloadItem.ID, errorMessage: String?)
@@ -93,6 +94,9 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
     private var lastSamples: [DownloadItem.ID: (date: Date, bytes: Int64)] = [:]
     /// 顯示給 UI 的平滑速度，避免數字跳得太誇張。
     private var displayedSpeeds: [DownloadItem.ID: Int64] = [:]
+    /// 各 HTTP 連線獨立速度取樣，不影響整體速度計算。
+    private var connectionLastSamples: [DownloadItem.ID: [Int: (date: Date, bytes: Int64)]] = [:]
+    private var connectionDisplayedSpeeds: [DownloadItem.ID: [Int: Int64]] = [:]
     /// 分段下載中的完整狀態，包括每段 range、暫存檔和最終檔案位置。
     private var segmentedDownloads: [DownloadItem.ID: SegmentedDownloadState] = [:]
     /// 單連線模式的 `.part-0.tmp` 檔案位置。
@@ -145,12 +149,14 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
     /// 單連線和分段下載都會保留已寫入的 `.part-N.tmp`，之後用 Range 接續。
     func pause(id: DownloadItem.ID) {
         suspendTransferTiming(id: id)
+        publishHTTPConnectionDetails(id: id, resetSpeeds: true)
 
         if let dataTasks = dataTasksByID[id] {
             dataTasks.forEach { $0.cancel() }
             dataTasksByID[id] = nil
             cancelScheduledSegmentRetries(id: id)
             closeSegmentStreams(for: id)
+            activeSegmentTaskIDs[id] = nil
             return
         }
 
@@ -171,6 +177,8 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         itemsByID[id] = nil
         lastSamples[id] = nil
         displayedSpeeds[id] = nil
+        connectionLastSamples[id] = nil
+        connectionDisplayedSpeeds[id] = nil
         singleTargetURLsByID[id] = nil
         singleExpectedBytesByID[id] = nil
         singleReceivedBytesByID[id] = nil
@@ -257,6 +265,7 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         beginTransferTiming(id: item.id, received: existingBytes)
         notifyStatus(id: item.id, message: "Single connection")
         task.resume()
+        publishHTTPConnectionDetails(id: item.id)
     }
 
     /// 建立多段 byte range，並為每段建立獨立 `.tmp` 檔案。
@@ -301,6 +310,9 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         itemsByID[item.id] = item
         beginTransferTiming(id: item.id, received: 0)
         notifyStatus(id: item.id, message: "\(Self.segmentedThreadCount) connections")
+        connectionLastSamples[item.id] = nil
+        connectionDisplayedSpeeds[item.id] = nil
+        publishHTTPConnectionDetails(id: item.id)
 
         enqueueSegmentTasks(tasks, id: item.id)
     }
@@ -378,6 +390,9 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         singleTargetURLsByID[item.id] = nil
         notifyStatus(id: item.id, message: "\(tasks.count + 1) connections")
         updateProgress(id: item.id, received: downloadedBytes, expected: totalBytes)
+        connectionLastSamples[item.id] = nil
+        connectionDisplayedSpeeds[item.id] = nil
+        publishHTTPConnectionDetails(id: item.id)
 
         enqueueSegmentTasks(tasks, id: item.id)
     }
@@ -589,7 +604,9 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
 
             let received = (singleReceivedBytesByID[id] ?? 0) + Int64(data.count)
             singleReceivedBytesByID[id] = received
+            updateConnectionSpeed(id: id, index: 0, received: received)
             updateProgress(id: id, received: received, expected: singleExpectedBytesByID[id] ?? 0)
+            publishHTTPConnectionDetails(id: id)
             return
         }
 
@@ -607,9 +624,11 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
         segment.received += Int64(data.count)
         state.segments[index] = segment
         segmentedDownloads[id] = state
+        updateConnectionSpeed(id: id, index: index, received: segment.received)
 
         let received = state.segments.values.reduce(Int64(0)) { $0 + $1.received }
         updateProgress(id: id, received: received, expected: state.totalBytes)
+        publishHTTPConnectionDetails(id: id)
     }
 
     /// 任務完成或失敗 callback。
@@ -621,8 +640,10 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
         let responseError = segmentResponseErrorsByTaskID.removeValue(forKey: taskID)
         let effectiveError = responseError ?? error
 
-        if case let .segment(id, _)? = taskPurposes[taskID] {
+        if case let .segment(id, index)? = taskPurposes[taskID] {
             activeSegmentTaskIDs[id]?.remove(taskID)
+            connectionDisplayedSpeeds[id, default: [:]][index] = 0
+            publishHTTPConnectionDetails(id: id)
         }
 
         defer {
@@ -654,6 +675,7 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
                         let downgradedLimit = requestLimit >= Self.segmentedThreadCount ? 2 : 1
                         let currentLimit = segmentConnectionLimits[id] ?? Self.segmentedThreadCount
                         segmentConnectionLimits[id] = min(currentLimit, downgradedLimit)
+                        publishHTTPConnectionDetails(id: id)
                     }
                     scheduleSegmentRetry(id: id, index: index, error: effectiveError)
                 } else if nsError.domain == Self.errorDomain,
@@ -717,6 +739,82 @@ private extension HTTPDownloadEngine {
                 speed: speed,
                 uploadSpeed: 0
             )
+        }
+    }
+
+    func updateConnectionSpeed(id: DownloadItem.ID, index: Int, received: Int64) {
+        let now = Date()
+        if let previous = connectionLastSamples[id]?[index] {
+            let elapsed = now.timeIntervalSince(previous.date)
+            guard elapsed >= 0.5 else { return }
+
+            let instantSpeed = max(0, Int64(Double(received - previous.bytes) / elapsed))
+            let previousSpeed = connectionDisplayedSpeeds[id]?[index] ?? instantSpeed
+            connectionDisplayedSpeeds[id, default: [:]][index] =
+                Int64(Double(previousSpeed) * 0.7 + Double(instantSpeed) * 0.3)
+        } else {
+            connectionDisplayedSpeeds[id, default: [:]][index] = 0
+        }
+        connectionLastSamples[id, default: [:]][index] = (now, received)
+    }
+
+    func publishHTTPConnectionDetails(id: DownloadItem.ID, resetSpeeds: Bool = false) {
+        if resetSpeeds {
+            connectionDisplayedSpeeds[id] = connectionDisplayedSpeeds[id]?.mapValues { _ in 0 }
+        }
+
+        let details: [HTTPConnectionDetail]
+        if let state = segmentedDownloads[id] {
+            let connectionLimit = max(
+                1,
+                min(segmentConnectionLimits[id] ?? Self.segmentedThreadCount, state.segments.count)
+            )
+            let activeIndexes = Set(
+                activeSegmentTaskIDs[id, default: []].compactMap { taskID -> Int? in
+                    guard case let .segment(_, index)? = taskPurposes[taskID] else { return nil }
+                    return index
+                }
+            )
+            let unfinishedSegments = state.segments
+                .filter { !$0.value.isFinished }
+                .sorted { lhs, rhs in
+                    let lhsIsActive = activeIndexes.contains(lhs.key)
+                    let rhsIsActive = activeIndexes.contains(rhs.key)
+                    if lhsIsActive != rhsIsActive {
+                        return lhsIsActive
+                    }
+                    return lhs.key < rhs.key
+                }
+            let visibleSegments = Array(unfinishedSegments.prefix(connectionLimit))
+
+            details = visibleSegments
+                .enumerated()
+                .map { displayIndex, entry in
+                    let (segmentIndex, segment) = entry
+                    return HTTPConnectionDetail(
+                        id: segmentIndex,
+                        title: "Thread \(displayIndex + 1)",
+                        bytesReceived: segment.received,
+                        bytesExpected: segment.range.upperBound - segment.range.lowerBound + 1,
+                        bytesPerSecond: connectionDisplayedSpeeds[id]?[segmentIndex] ?? 0
+                    )
+                }
+        } else if singleDataTasksByID[id] != nil || incompleteFilesByID[id] != nil {
+            details = [
+                HTTPConnectionDetail(
+                    id: 0,
+                    title: "Connection 1",
+                    bytesReceived: singleReceivedBytesByID[id] ?? 0,
+                    bytesExpected: singleExpectedBytesByID[id] ?? 0,
+                    bytesPerSecond: connectionDisplayedSpeeds[id]?[0] ?? 0
+                )
+            ]
+        } else {
+            details = []
+        }
+
+        Task { @MainActor [weak self] in
+            self?.delegate?.updateHTTPConnections(id: id, connections: details)
         }
     }
 
@@ -867,6 +965,7 @@ private extension HTTPDownloadEngine {
     func resumeSegmentedDownload(id: DownloadItem.ID) {
         guard var state = segmentedDownloads[id] else { return }
 
+        activeSegmentTaskIDs[id] = nil
         var tasks: [URLSessionDataTask] = []
 
         for (index, segment) in state.segments.sorted(by: { $0.key < $1.key }) {
@@ -899,6 +998,8 @@ private extension HTTPDownloadEngine {
         let received = state.segments.values.reduce(Int64(0)) { $0 + $1.received }
         lastSamples[id] = (Date(), received)
         displayedSpeeds[id] = 0
+        connectionLastSamples[id] = nil
+        connectionDisplayedSpeeds[id] = nil
         beginTransferTiming(id: id, received: received)
 
         if state.segments.values.allSatisfy(\.isFinished) {
@@ -913,6 +1014,7 @@ private extension HTTPDownloadEngine {
 
         notifyStatus(id: id, message: segmentConnectionStatus(id: id))
         updateProgress(id: id, received: received, expected: state.totalBytes)
+        publishHTTPConnectionDetails(id: id)
         enqueueSegmentTasks(tasks, id: id)
     }
 
@@ -957,6 +1059,8 @@ private extension HTTPDownloadEngine {
         dataTasksByID[id] = nil
         activeSegmentTaskIDs[id] = nil
         segmentConnectionLimits[id] = nil
+        connectionLastSamples[id] = nil
+        connectionDisplayedSpeeds[id] = nil
         closeSegmentStreams(for: id)
 
         if let state = segmentedDownloads[id] {
@@ -981,6 +1085,8 @@ private extension HTTPDownloadEngine {
         segmentRetryCounts[id] = nil
         activeSegmentTaskIDs[id] = nil
         segmentConnectionLimits[id] = nil
+        connectionLastSamples[id] = nil
+        connectionDisplayedSpeeds[id] = nil
         lastSamples[id] = nil
         displayedSpeeds[id] = nil
         singleTargetURLsByID[id] = nil
@@ -1011,6 +1117,8 @@ private extension HTTPDownloadEngine {
         cancelScheduledSegmentRetries(id: id)
         activeSegmentTaskIDs[id] = nil
         segmentConnectionLimits[id] = nil
+        connectionLastSamples[id] = nil
+        connectionDisplayedSpeeds[id] = nil
         lastSamples[id] = nil
         displayedSpeeds[id] = nil
         singleTargetURLsByID[id] = nil
@@ -1150,6 +1258,7 @@ private extension HTTPDownloadEngine {
             state.segments[index] = segment
             segmentedDownloads[id] = state
             segmentRetryCounts[id]?[index] = nil
+            publishHTTPConnectionDetails(id: id)
 
             if state.segments.values.allSatisfy(\.isFinished) {
                 do {

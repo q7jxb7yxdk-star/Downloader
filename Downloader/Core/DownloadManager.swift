@@ -404,6 +404,13 @@ final class DownloadManager: NSObject, ObservableObject {
         scheduleSave()
     }
 
+    /// HTTP engine 回報單線或各分段連線的即時資料。
+    func updateHTTPConnections(id: DownloadItem.ID, connections: [HTTPConnectionDetail]) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        guard !items[index].isTrashed, items[index].kind == .http else { return }
+        items[index].httpConnectionDetails = connections
+    }
+
     /// Engine 回報補充狀態文字，例如「Checking range support」或 peer 數量。
     func updateStatusText(id: DownloadItem.ID, message: String?) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
@@ -450,6 +457,7 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].bytesExpected = max(items[index].bytesExpected, finalExpected, completedBytes)
         items[index].bytesPerSecond = 0
         items[index].uploadBytesPerSecond = 0
+        items[index].httpConnectionDetails = []
         if !wasAlreadyCompleted {
             items[index].averageBytesPerSecond = averageBytesPerSecond ?? (completedBytes > 0 ? Int64(Double(completedBytes) / elapsed) : 0)
             items[index].averageUploadBytesPerSecond = averageUploadBytesPerSecond ?? 0
@@ -500,6 +508,9 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// Engine 回報失敗。
     func fail(id: DownloadItem.ID, errorMessage: String?) {
+        if let index = items.firstIndex(where: { $0.id == id }) {
+            items[index].httpConnectionDetails = []
+        }
         mark(id: id, status: .failed, errorMessage: errorMessage)
     }
 

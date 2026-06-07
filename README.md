@@ -5,7 +5,7 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 ## Features
 
 - HTTP/HTTPS downloads.
-- HTTP Range segmented downloads with 4 concurrent connections for supported large files.
+- HTTP Range segmented downloads with up to 4 concurrent connections for supported large files.
 - Pause, resume, delete, trash, and restore download tasks.
 - Magnet and BT downloads through bundled libtorrent.
 - Local and remote `.torrent` file import.
@@ -16,6 +16,7 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - Completed BT downloads show average download/upload speeds and the current seeding upload speed.
 - Double-click a completed item to reveal it in Finder.
 - Downloads table shows name, progress, percentage, downloaded size / total size, speed, ETA, and status.
+- Active HTTP downloads show overall progress plus per-connection progress, transferred size, and speed.
 - While downloading, ETA shows the estimated remaining time. After completion, it shows the accumulated active download time, excluding paused time.
 - Right-click actions: Resume, Pause, Show in Finder, Delete, Delete with Files.
 - Download completion notification and system sound.
@@ -142,6 +143,14 @@ Downloader first asks Finder to move the files to Trash, so macOS may ask for pe
 Downloader starts normal HTTP downloads immediately with one connection. In the background, it probes whether the server supports HTTP Range requests.
 
 If the server supports Range and the file is large enough, Downloader upgrades the task to segmented downloading.
+
+Segmented downloads start with up to four connections. If the server limits
+parallel Range requests, Downloader progressively reduces the active limit from
+4 to 2 to 1 without discarding downloaded segments. The table shows only the
+currently usable connections and prioritizes active or unfinished segments.
+
+Pausing keeps the `.part-N.tmp` files. Resuming requests only the missing byte
+ranges and clears stale cancelled-task slots before restarting the connections.
 
 Default HTTP segmented connections:
 

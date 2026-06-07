@@ -35,22 +35,23 @@ struct DownloadsListView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 AdaptiveTooltipText(item.name)
                                 ProgressSummaryView(item: item)
+                                if item.kind == .http,
+                                   item.status != .completed,
+                                   !item.httpConnectionDetails.isEmpty {
+                                    HTTPConnectionProgressView(connections: item.httpConnectionDetails)
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 380, ideal: 560)
+                    .width(min: 520, ideal: 720)
 
                     TableColumn("Speed") { item in
-                        // monospacedDigit 讓速度數字跳動時欄位比較穩定。
-                        Text(item.speedText)
-                            .monospacedDigit()
-                            .lineLimit(item.kind == .torrent && item.status == .completed && item.isTorrentSeeding && item.uploadBytesPerSecond > 0 ? 3 : (item.kind == .torrent && (item.status == .downloading || item.status == .completed) ? 2 : 1))
-                            .frame(minHeight: item.kind == .torrent && item.status == .completed && item.isTorrentSeeding && item.uploadBytesPerSecond > 0 ? 48 : 0, alignment: .leading)
+                        HTTPDownloadSpeedView(item: item)
                             .rowInteraction(for: item, visibleIDs: items.map(\.id), downloadManager: downloadManager, focusTable: focusTable)
                     }
-                    .width(min: 30, ideal: 60)
+                    .width(min: 53, ideal: 99)
 
                     TableColumn("ETA") { item in
                         Text(item.downloadTimeText)
@@ -109,12 +110,90 @@ struct DownloadsListView: View {
     ///
     /// 視窗少於這個寬度時使用水平 scrollbar；大於這個寬度時只填滿視窗，
     /// 不額外製造右側空白。
-    private var minimumTableWidth: CGFloat { 800 }
+    private var minimumTableWidth: CGFloat { 1100 }
 
     /// 讓列表重新取得鍵盤焦點，selection 才會用藍色顯示。
     private func focusTable() {
         tableIsFocused = true
     }
+}
+
+private struct HTTPConnectionProgressView: View {
+    let connections: [HTTPConnectionDetail]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: HTTPDetailLayout.rowSpacing) {
+            ForEach(connections) { connection in
+                HStack(spacing: 6) {
+                    Text(connection.title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 72, alignment: .leading)
+
+                    ProgressView(value: connection.progress)
+                        .frame(maxWidth: .infinity)
+
+                    Text("\(Int((connection.progress * 100).rounded()))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .trailing)
+
+                    Text(connection.fileSizeText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .frame(width: 132, alignment: .trailing)
+                }
+                .frame(height: HTTPDetailLayout.rowHeight)
+            }
+        }
+    }
+}
+
+private struct HTTPDownloadSpeedView: View {
+    let item: DownloadItem
+
+    var body: some View {
+        Group {
+            if item.kind == .http,
+               item.status != .completed,
+               !item.httpConnectionDetails.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Color.clear
+                        .frame(height: HTTPDetailLayout.nameRowHeight)
+
+                    Text("Total  \(item.speedText)")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(height: HTTPDetailLayout.rowHeight, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: HTTPDetailLayout.rowSpacing) {
+                        ForEach(item.httpConnectionDetails) { connection in
+                            Text(connection.speedText)
+                                .monospacedDigit()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .font(.caption)
+                                .frame(height: HTTPDetailLayout.rowHeight)
+                        }
+                    }
+                }
+            } else {
+                Text(item.speedText)
+                    .monospacedDigit()
+                    .lineLimit(item.kind == .torrent && item.status == .completed && item.isTorrentSeeding && item.uploadBytesPerSecond > 0 ? 3 : (item.kind == .torrent && (item.status == .downloading || item.status == .completed) ? 2 : 1))
+                    .frame(minHeight: item.kind == .torrent && item.status == .completed && item.isTorrentSeeding && item.uploadBytesPerSecond > 0 ? 48 : 0, alignment: .leading)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private enum HTTPDetailLayout {
+    static let nameRowHeight: CGFloat = 17
+    static let rowHeight: CGFloat = 16
+    static let rowSpacing: CGFloat = 3
 }
 
 /// 檔名下方的輕量進度摘要。
@@ -139,6 +218,7 @@ private struct ProgressSummaryView: View {
                 .lineLimit(1)
                 .help(item.fileSizeText)
         }
+        .frame(height: HTTPDetailLayout.rowHeight)
     }
 }
 
@@ -199,6 +279,19 @@ private extension DownloadItem {
     var percentText: String {
         let percentage = min(max(progress, 0), 1) * 100
         return "\(Int(percentage.rounded()))%"
+    }
+}
+
+private extension HTTPConnectionDetail {
+    var fileSizeText: String {
+        let received = ByteCountFormatter.string(fromByteCount: bytesReceived, countStyle: .binary)
+        guard bytesExpected > 0 else { return received + " / -" }
+        let expected = ByteCountFormatter.string(fromByteCount: bytesExpected, countStyle: .binary)
+        return received + " / " + expected
+    }
+
+    var speedText: String {
+        ByteCountFormatter.string(fromByteCount: bytesPerSecond, countStyle: .binary) + "/s"
     }
 }
 
