@@ -789,6 +789,21 @@ the same injected-script messaging API. The message includes an explicit
 `torrent` kind when the page identifies a torrent whose endpoint URL has no
 `.torrent` suffix.
 
+External apps such as Telegram can ask Safari to navigate directly to a file
+URL. This does not create a page click event, so the native extension also
+implements:
+
+```swift
+page(_:willNavigateTo:)
+```
+
+For HTTP/HTTPS URLs ending in a known downloadable extension, this callback
+queues the URL, opens Downloader, and closes the containing Safari tab. This
+prevents Safari from keeping an empty temporary download page or downloading
+the same file in parallel. A three-second in-memory URL window suppresses
+duplicate navigation callbacks. Direct `.torrent` URLs are queued with the
+explicit torrent kind; other known extensions use normal HTTP download routing.
+
 Ambiguous HTTP/HTTPS endpoints whose path contains `/file/` or `/download` use
 the `probe-download` message. The native extension sends a GET request with:
 
@@ -828,6 +843,21 @@ This deliberately does not intercept every link. Downloads generated through
 JavaScript, forms, authenticated POST requests, or `blob:` URLs cannot be
 reconstructed safely from a normal anchor URL and should use Safari or the
 right-click fallback.
+
+### App Transport Security
+
+The main app accepts user-provided download URLs from arbitrary hosts, including
+servers that only provide plain HTTP. `Downloader/Info.plist` therefore contains:
+
+```text
+NSAppTransportSecurity
+  NSAllowsArbitraryLoads = true
+```
+
+This exception applies to the main Downloader app so its `URLSession` can load
+plain HTTP resources. It does not convert HTTP into a secure connection; HTTPS
+remains preferable because it provides transport encryption and server
+authentication.
 
 ### Native Context Menu Flow
 

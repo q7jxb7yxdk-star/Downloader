@@ -3,6 +3,15 @@ import SafariServices
 import os.log
 
 final class SafariWebExtensionHandler: SFSafariExtensionHandler {
+    private static let downloadableExtensions: Set<String> = [
+        "7z", "aac", "avi", "bin", "bz2", "csv", "dmg", "doc", "docx", "epub",
+        "exe", "flac", "gif", "gz", "iso", "jpeg", "jpg", "m4a", "m4v", "mkv",
+        "mov", "mp3", "mp4", "msi", "pdf", "pkg", "png", "ppt", "pptx", "rar",
+        "tar", "torrent", "tsv", "txt", "wav", "webm", "webp", "xls", "xlsx",
+        "xz", "zip"
+    ]
+    private static let duplicateWindow: TimeInterval = 3
+
     private struct PendingSafariDownload: Codable {
         let url: String
         let kind: String?
@@ -13,6 +22,27 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
     private let queueFileName = "pending-safari-downloads.json"
     private let downloadCommand = "download-link"
     private let autoCaptureKey = "automaticallyCaptureSafariDownloads"
+    private let recentDownloadQueue = DispatchQueue(
+        label: "com.sunnyyu.Downloader.SafariExtension.RecentDownloads"
+    )
+    private var recentDownloadDates: [String: Date] = [:]
+
+    override func page(_ page: SFSafariPage, willNavigateTo url: URL?) {
+        guard autoCaptureEnabled(),
+              let url,
+              isDirectDownloadURL(url),
+              enqueueAndOpenDownloader(
+                  url.absoluteString,
+                  kind: url.pathExtension.lowercased() == "torrent" ? "torrent" : nil,
+                  name: url.lastPathComponent
+              )
+        else { return }
+
+        page.getContainingTab { tab in
+            tab.close()
+        }
+        os_log(.default, "Automatically captured direct Safari navigation: %@", url.absoluteString)
+    }
 
     override func validateContextMenuItem(
         withCommand command: String,
@@ -87,7 +117,10 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
         }
     }
 
-    private func enqueueAndOpenDownloader(_ link: String, kind: String?, name: String?) {
+    @discardableResult
+    private func enqueueAndOpenDownloader(_ link: String, kind: String?, name: String?) -> Bool {
+        guard shouldEnqueueDownload(link) else { return false }
+
         enqueueDownload(link, kind: kind, name: name)
         DistributedNotificationCenter.default().postNotificationName(
             Notification.Name("com.sunnyyu.Downloader.addDownload"),
@@ -97,6 +130,31 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
         )
 
         openContainingApp()
+        return true
+    }
+
+    private func isDirectDownloadURL(_ url: URL) -> Bool {
+        guard url.scheme == "http" || url.scheme == "https" else { return false }
+
+        let pathExtension = url.pathExtension.lowercased()
+        return Self.downloadableExtensions.contains(pathExtension)
+    }
+
+    private func shouldEnqueueDownload(_ link: String) -> Bool {
+        recentDownloadQueue.sync {
+            let now = Date()
+            recentDownloadDates = recentDownloadDates.filter {
+                now.timeIntervalSince($0.value) < Self.duplicateWindow
+            }
+
+            guard let previousDate = recentDownloadDates[link],
+                  now.timeIntervalSince(previousDate) < Self.duplicateWindow
+            else {
+                recentDownloadDates[link] = now
+                return true
+            }
+            return false
+        }
     }
 
     private func openContainingApp() {

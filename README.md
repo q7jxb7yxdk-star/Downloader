@@ -201,10 +201,19 @@ only when its response headers identify a Torrent file. Dynamic downloads
 created entirely by JavaScript, authenticated POST requests, or `blob:` URLs
 may still require Safari's own download flow.
 
+Direct file URLs opened in Safari by another app, such as Telegram, are also
+captured when they end in a known downloadable extension. Downloader opens in
+the foreground and Safari closes the temporary download tab. Duplicate
+navigation events for the same URL are ignored for a short period.
+
 The Safari extension sends download URLs through an App Group queue. The
 extension launches its containing Downloader app directly. The
 `downloader://authorize` URL is retained only as a fallback and does not carry
 the download URL.
+
+Downloader accepts both HTTPS and plain HTTP download URLs. Plain HTTP support
+is required for download servers that do not offer TLS, but HTTPS should be
+preferred because HTTP traffic is not encrypted or authenticated.
 
 Downloader also registers the `.torrent` document type with macOS. Opening a
 downloaded torrent file from Finder therefore launches Downloader and begins
