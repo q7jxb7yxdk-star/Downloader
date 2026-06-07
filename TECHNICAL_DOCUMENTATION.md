@@ -146,6 +146,12 @@ The file candidates are inferred from the task type:
 
 Before moving files, Downloader pauses the active engine while preserving incomplete files. After files are moved to Trash successfully, it cancels the engine state and removes the task from the list.
 
+Outside the app's Trash category, the normal `Delete` action remains a soft
+delete. Inside Trash, `Delete` reuses this file-aware deletion pipeline. HTTP
+files and partial segments, or selected BT files and their `.tmp` counterparts,
+are moved to macOS Trash before the task is removed from the list. If a file
+operation fails, that task remains in the app Trash with an error message.
+
 The trash operation prefers Finder automation:
 
 ```swift
@@ -224,6 +230,48 @@ filename.part-3.tmp
 When all segments finish, `mergeSegmentedDownload` joins them in index order and writes the final file.
 
 The merge reads 1 MB chunks at a time so large files are not fully loaded into memory.
+
+Each segmented response must return `206 Partial Content` with a `Content-Range`
+whose start byte matches the request, whose end byte does not exceed the
+assigned segment, and whose total file size is correct. A server may return a
+shorter valid range; Downloader then requests the remaining bytes from the
+first missing position. A segment is complete only when its received byte count
+matches its full assigned range.
+
+If the server returns `200 OK` or omits a usable `Content-Range`, Downloader
+cancels and removes the temporary segments, resets transfer accounting, and
+restarts the item with a single connection. Retry limits for other range
+failures are tracked independently per segment, so one connection does not
+consume the retry allowance of the others.
+
+### Adaptive Connection Limit
+
+Segmented downloads start with up to four active connections. Initial segment
+requests are staggered by 0.4 seconds instead of opening all connections at
+exactly the same moment.
+
+For temporary server responses such as `408`, `429`, and `5xx`, Downloader
+keeps the existing segment files and retries only the unfinished byte range.
+Retries use the server's `Retry-After` value when available, otherwise they use
+exponential backoff.
+
+When the server returns `429 Too Many Requests`, the active connection limit is
+reduced progressively:
+
+```text
+4 connections -> 2 connections -> 1 connection
+```
+
+Each request records the connection limit in effect when it actually starts.
+This prevents several `429` responses from the same four-connection batch from
+incorrectly reducing the limit directly from four to one. The limit only drops
+to one when a request that started under the two-connection limit also receives
+`429`.
+
+Reducing the connection limit does not delete `.part-N.tmp` files or restart
+the download. Completed bytes remain in place, queued segments wait for an
+available connection slot, and failed segments resume from their first missing
+byte.
 
 ### Pause and Resume
 
@@ -753,6 +801,24 @@ whole file. A `.torrent` filename or `application/x-bittorrent` response is
 queued as BT and opens Downloader. Otherwise `download-probe-result` tells the
 injected script to continue the original Safari navigation. The probe has a
 10-second timeout.
+
+The extension parses both `filename=` and UTF-8 `filename*=` values from
+`Content-Disposition`. The sanitized final path component is stored in the App
+Group queue and passed through `ContentView` to `DownloadManager`, so the Name
+column shows the server-provided Torrent filename instead of an opaque download
+endpoint identifier.
+
+Before `ContentView` imports downloads from Safari, a custom URL scheme, or a
+local `.torrent` file, it switches the sidebar to All and yields one MainActor
+update cycle. The downloads are then inserted and selected after the Table has
+adopted the All filter. This prevents a filtered Table from briefly receiving a
+selection for an item that is not present in its visible rows.
+
+`HTTPURLResponse.suggestedFilename` is preferred because Foundation handles
+standard response filename rules. For non-standard servers that place raw
+UTF-8 bytes inside `filename=`, the extension performs a reversible
+ISO-8859-1-to-UTF-8 repair before sanitizing the final path component. Normal
+filenames are left unchanged.
 
 Because the probe runs inside the sandboxed Safari App Extension, the extension
 entitlements include `com.apple.security.network.client`. Probe failures and

@@ -6,6 +6,7 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
     private struct PendingSafariDownload: Codable {
         let url: String
         let kind: String?
+        let name: String?
     }
 
     private let appGroupIdentifier = "group.com.sunnyyu.Downloader"
@@ -37,7 +38,7 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
               !link.isEmpty
         else { return }
 
-        enqueueAndOpenDownloader(link, kind: nil)
+        enqueueAndOpenDownloader(link, kind: nil, name: nil)
         os_log(.default, "Queued Safari context menu download: %@", link)
     }
 
@@ -58,7 +59,7 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
                   !link.isEmpty
             else { return }
 
-            enqueueAndOpenDownloader(link, kind: userInfo?["kind"] as? String)
+            enqueueAndOpenDownloader(link, kind: userInfo?["kind"] as? String, name: nil)
             os_log(.default, "Automatically captured Safari download: %@", link)
         case "probe-download":
             guard autoCaptureEnabled(),
@@ -67,9 +68,9 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
                   let url = URL(string: link)
             else { return }
 
-            probeDownload(url) { isTorrent in
+            probeDownload(url) { isTorrent, fileName in
                 if isTorrent {
-                    self.enqueueAndOpenDownloader(link, kind: "torrent")
+                    self.enqueueAndOpenDownloader(link, kind: "torrent", name: fileName)
                     os_log(.default, "Automatically captured probed torrent: %@", link)
                 }
 
@@ -86,8 +87,8 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
         }
     }
 
-    private func enqueueAndOpenDownloader(_ link: String, kind: String?) {
-        enqueueDownload(link, kind: kind)
+    private func enqueueAndOpenDownloader(_ link: String, kind: String?, name: String?) {
+        enqueueDownload(link, kind: kind, name: name)
         DistributedNotificationCenter.default().postNotificationName(
             Notification.Name("com.sunnyyu.Downloader.addDownload"),
             object: nil,
@@ -131,7 +132,10 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
         return defaults.bool(forKey: autoCaptureKey)
     }
 
-    private func probeDownload(_ url: URL, completion: @escaping (Bool) -> Void) {
+    private func probeDownload(
+        _ url: URL,
+        completion: @escaping (Bool, String?) -> Void
+    ) {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 10
@@ -143,14 +147,14 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
             }
 
             let isTorrent: Bool
+            var fileName: String?
             if let response = response as? HTTPURLResponse {
                 let contentType = response.value(forHTTPHeaderField: "Content-Type") ?? ""
                 let disposition = response.value(forHTTPHeaderField: "Content-Disposition") ?? ""
+                fileName = Self.sanitizedFileName(response.suggestedFilename)
+                    ?? Self.fileName(fromContentDisposition: disposition)
                 isTorrent = contentType.localizedCaseInsensitiveContains("application/x-bittorrent")
-                    || disposition.range(
-                        of: #"\.torrent(?:["';\s]|$)"#,
-                        options: [.regularExpression, .caseInsensitive]
-                    ) != nil
+                    || fileName?.lowercased().hasSuffix(".torrent") == true
                 os_log(
                     .default,
                     "Torrent probe response %{public}ld for %{public}@; type=%{public}@; disposition=%{public}@",
@@ -164,16 +168,66 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
             }
 
             DispatchQueue.main.async {
-                completion(isTorrent)
+                completion(isTorrent, fileName)
             }
         }.resume()
     }
 
-    private func enqueueDownload(_ link: String, kind: String?) {
+    private static func fileName(fromContentDisposition disposition: String) -> String? {
+        guard !disposition.isEmpty else { return nil }
+
+        if let encodedRange = disposition.range(
+            of: #"filename\*\s*=\s*UTF-8''([^;]+)"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) {
+            let match = String(disposition[encodedRange])
+            if let valueStart = match.range(of: "''")?.upperBound {
+                let encodedName = String(match[valueStart...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if let decodedName = encodedName.removingPercentEncoding {
+                    return sanitizedFileName(decodedName)
+                }
+            }
+        }
+
+        guard let nameRange = disposition.range(
+            of: #"filename\s*=\s*(?:"([^"]+)"|([^;]+))"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) else {
+            return nil
+        }
+
+        let match = String(disposition[nameRange])
+        guard let equalsIndex = match.firstIndex(of: "=") else { return nil }
+        let rawName = match[match.index(after: equalsIndex)...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        return sanitizedFileName(rawName)
+    }
+
+    private static func sanitizedFileName(_ name: String?) -> String? {
+        guard let name, !name.isEmpty else { return nil }
+        let repairedName = repairUTF8Mojibake(in: name) ?? name
+        let fileName = URL(fileURLWithPath: repairedName).lastPathComponent
+        return fileName.isEmpty ? nil : fileName
+    }
+
+    private static func repairUTF8Mojibake(in value: String) -> String? {
+        guard value.unicodeScalars.contains(where: { $0.value >= 0x80 }),
+              let latin1Data = value.data(using: .isoLatin1),
+              let repaired = String(data: latin1Data, encoding: .utf8),
+              repaired != value
+        else {
+            return nil
+        }
+
+        return repaired
+    }
+
+    private func enqueueDownload(_ link: String, kind: String?, name: String?) {
         guard let queueURL = sharedQueueURL() else { return }
 
         var pending = pendingDownloads(from: queueURL)
-        pending.append(PendingSafariDownload(url: link, kind: kind))
+        pending.append(PendingSafariDownload(url: link, kind: kind, name: name))
 
         guard let data = try? JSONEncoder().encode(pending) else { return }
         try? data.write(to: queueURL, options: .atomic)
@@ -195,7 +249,7 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
         }
 
         if let legacyLinks = try? JSONDecoder().decode([String].self, from: data) {
-            return legacyLinks.map { PendingSafariDownload(url: $0, kind: nil) }
+            return legacyLinks.map { PendingSafariDownload(url: $0, kind: nil, name: nil) }
         }
 
         return []

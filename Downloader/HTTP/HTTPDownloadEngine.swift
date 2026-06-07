@@ -56,6 +56,10 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
 
     /// 單連線失敗時最多重試次數。
     private static let maximumRetryCount = 3
+    private static let errorDomain = "HTTPDownloadEngine"
+    private static let fallbackToSingleErrorCode = 100
+    private static let retryableResponseErrorCode = 101
+    private static let permanentResponseErrorCode = 102
 
     /// 背景 Range 探測最多等待時間。
     ///
@@ -75,6 +79,16 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
     private var itemsByID: [DownloadItem.ID: DownloadItem] = [:]
     /// 記錄重試次數，避免網絡一直失敗時無限重試。
     private var retryCounts: [DownloadItem.ID: Int] = [:]
+    /// 分段各自計算重試次數，避免不同分段共用同一個重試額度。
+    private var segmentRetryCounts: [DownloadItem.ID: [Int: Int]] = [:]
+    /// 等待啟動或重試的分段工作；Pause 或 Cancel 時必須取消。
+    private var scheduledSegmentStarts: [DownloadItem.ID: [Int: Task<Void, Never>]] = [:]
+    /// 每個下載目前容許的活躍分段數；收到 429 後會由 4 降至 2，再降至 1。
+    private var segmentConnectionLimits: [DownloadItem.ID: Int] = [:]
+    /// 已 resume、尚未完成 callback 的分段 task identifiers。
+    private var activeSegmentTaskIDs: [DownloadItem.ID: Set<Int>] = [:]
+    /// 記錄分段 task 實際啟動時的連線級別，避免同一批 429 重複降級。
+    private var segmentConnectionLimitByTaskID: [Int: Int] = [:]
     /// 上一次速度取樣。用來計算「這 0.5 秒下載了多少 byte」。
     private var lastSamples: [DownloadItem.ID: (date: Date, bytes: Int64)] = [:]
     /// 顯示給 UI 的平滑速度，避免數字跳得太誇張。
@@ -93,6 +107,10 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
     private var transferTimingsByID: [DownloadItem.ID: TransferTiming] = [:]
     /// 每個單線 task 的起始 offset，用來判斷 response 應該 append 還是重寫。
     private var singleStartOffsetsByTaskID: [Int: Int64] = [:]
+    /// 每個分段 task 實際要求的起始 offset，用來驗證 server 的 Content-Range。
+    private var segmentStartOffsetsByTaskID: [Int: Int64] = [:]
+    /// response 驗證失敗時保存具體錯誤，避免 URLSession 的 cancelled 錯誤被忽略。
+    private var segmentResponseErrorsByTaskID: [Int: Error] = [:]
     /// 正在由單線切換到分段的 item。取消舊 task 時不要誤判為真正失敗。
     private var switchingToSegmentedIDs: Set<DownloadItem.ID> = []
     /// 每個 task 對應的檔案寫入 stream。收到 data callback 時直接寫入磁碟。
@@ -131,6 +149,7 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         if let dataTasks = dataTasksByID[id] {
             dataTasks.forEach { $0.cancel() }
             dataTasksByID[id] = nil
+            cancelScheduledSegmentRetries(id: id)
             closeSegmentStreams(for: id)
             return
         }
@@ -148,6 +167,7 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         cleanupSegmentedDownload(id: id)
         removeIncompleteFile(id: id)
         retryCounts[id] = nil
+        segmentRetryCounts[id] = nil
         itemsByID[id] = nil
         lastSamples[id] = nil
         displayedSpeeds[id] = nil
@@ -193,10 +213,16 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
     private func probeRangeSupport(for url: URL) async throws -> (supportsRange: Bool, contentLength: Int64) {
         var request = downloadRequest(for: url)
         request.httpMethod = "GET"
-        request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+        setByteRange("bytes=0-0", on: &request)
         request.timeoutInterval = Self.rangeProbeTimeout
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        let probeSession = URLSession(configuration: configuration)
+        defer { probeSession.invalidateAndCancel() }
+
+        let (_, response) = try await probeSession.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             return (false, 0)
         }
@@ -219,7 +245,7 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
 
         var request = downloadRequest(for: item.source)
         if existingBytes > 0 {
-            request.setValue("bytes=\(existingBytes)-", forHTTPHeaderField: "Range")
+            setByteRange("bytes=\(existingBytes)-", on: &request)
         }
 
         let task = session.dataTask(with: request)
@@ -254,10 +280,11 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
             temporaryFiles.append(fileURL)
 
             var request = downloadRequest(for: item.source)
-            request.setValue("bytes=\(range.lowerBound)-\(range.upperBound)", forHTTPHeaderField: "Range")
+            setByteRange("bytes=\(range.lowerBound)-\(range.upperBound)", on: &request)
 
             let task = session.dataTask(with: request)
             taskPurposes[task.taskIdentifier] = .segment(item.id, index)
+            segmentStartOffsetsByTaskID[task.taskIdentifier] = range.lowerBound
             segments[index] = SegmentState(index: index, range: range, fileURL: fileURL)
             tasks.append(task)
         }
@@ -270,11 +297,12 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
             segments: segments
         )
         dataTasksByID[item.id] = tasks
+        segmentConnectionLimits[item.id] = Self.segmentedThreadCount
         itemsByID[item.id] = item
         beginTransferTiming(id: item.id, received: 0)
         notifyStatus(id: item.id, message: "\(Self.segmentedThreadCount) connections")
 
-        tasks.forEach { $0.resume() }
+        enqueueSegmentTasks(tasks, id: item.id)
     }
 
     /// 把正在跑的單線下載升級成分段下載。
@@ -326,10 +354,11 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
             temporaryFiles.append(fileURL)
 
             var request = downloadRequest(for: item.source)
-            request.setValue("bytes=\(range.lowerBound)-\(range.upperBound)", forHTTPHeaderField: "Range")
+            setByteRange("bytes=\(range.lowerBound)-\(range.upperBound)", on: &request)
 
             let task = session.dataTask(with: request)
             taskPurposes[task.taskIdentifier] = .segment(item.id, index)
+            segmentStartOffsetsByTaskID[task.taskIdentifier] = range.lowerBound
             segments[index] = SegmentState(index: index, range: range, fileURL: fileURL)
             tasks.append(task)
         }
@@ -342,6 +371,7 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
             segments: segments
         )
         dataTasksByID[item.id] = tasks
+        segmentConnectionLimits[item.id] = Self.segmentedThreadCount
         itemsByID[item.id] = item
         singleExpectedBytesByID[item.id] = nil
         singleReceivedBytesByID[item.id] = nil
@@ -349,7 +379,7 @@ final class HTTPDownloadEngine: NSObject, @unchecked Sendable {
         notifyStatus(id: item.id, message: "\(tasks.count + 1) connections")
         updateProgress(id: item.id, received: downloadedBytes, expected: totalBytes)
 
-        tasks.forEach { $0.resume() }
+        enqueueSegmentTasks(tasks, id: item.id)
     }
 
     /// 把檔案大小切成多個連續 byte range。
@@ -441,17 +471,110 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
         }
 
         guard case let .segment(id, index)? = taskPurposes[dataTask.taskIdentifier],
-              let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 206,
               let state = segmentedDownloads[id],
-              let segment = state.segments[index],
-              let stream = OutputStream(url: segment.fileURL, append: segment.received > 0)
+              let segment = state.segments[index]
         else {
             return .cancel
         }
 
+        let taskID = dataTask.taskIdentifier
+        let expectedStart = segmentStartOffsetsByTaskID[taskID]
+            ?? segment.range.lowerBound + segment.received
+        guard let httpResponse = response as? HTTPURLResponse else {
+            segmentResponseErrorsByTaskID[taskID] = NSError(
+                domain: Self.errorDomain,
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Server returned a non-HTTP response for a byte-range request."]
+            )
+            return .cancel
+        }
+
+        let contentRange = httpResponse.value(forHTTPHeaderField: "Content-Range")
+        guard httpResponse.statusCode == 206 else {
+            let statusCode = httpResponse.statusCode
+            let isRetryable = statusCode == 408
+                || statusCode == 429
+                || (500...599).contains(statusCode)
+
+            if isRetryable {
+                segmentResponseErrorsByTaskID[taskID] = NSError(
+                    domain: Self.errorDomain,
+                    code: Self.retryableResponseErrorCode,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "Server returned HTTP \(statusCode).",
+                        "HTTPStatus": statusCode,
+                        "RetryAfter": retryDelay(from: httpResponse)
+                    ]
+                )
+                return .cancel
+            }
+
+            if statusCode != 200 {
+                segmentResponseErrorsByTaskID[taskID] = NSError(
+                    domain: Self.errorDomain,
+                    code: Self.permanentResponseErrorCode,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "Server returned HTTP \(statusCode) for a byte-range request.",
+                        "HTTPStatus": statusCode
+                    ]
+                )
+                return .cancel
+            }
+
+            segmentResponseErrorsByTaskID[taskID] = NSError(
+                domain: Self.errorDomain,
+                code: Self.fallbackToSingleErrorCode,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Server does not support reliable byte-range downloads. Falling back to a single connection.",
+                    "HTTPStatus": httpResponse.statusCode,
+                    "ContentRange": contentRange ?? "<missing>"
+                ]
+            )
+            return .cancel
+        }
+
+        guard let contentRange,
+              let responseRange = byteRange(fromContentRange: contentRange)
+        else {
+            segmentResponseErrorsByTaskID[taskID] = NSError(
+                domain: Self.errorDomain,
+                code: Self.fallbackToSingleErrorCode,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Server omitted a usable Content-Range. Falling back to a single connection.",
+                    "HTTPStatus": httpResponse.statusCode,
+                    "ContentRange": contentRange ?? "<missing>"
+                ]
+            )
+            return .cancel
+        }
+
+        guard responseRange.start == expectedStart,
+              responseRange.end >= responseRange.start,
+              responseRange.end <= segment.range.upperBound,
+              responseRange.total == state.totalBytes
+        else {
+            segmentResponseErrorsByTaskID[taskID] = NSError(
+                domain: Self.errorDomain,
+                code: 2,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Invalid byte-range response: requested \(expectedStart)-\(segment.range.upperBound)/\(state.totalBytes), received \(contentRange)."
+                ]
+            )
+            return .cancel
+        }
+
+        guard let stream = OutputStream(url: segment.fileURL, append: segment.received > 0) else {
+            segmentResponseErrorsByTaskID[taskID] = NSError(
+                domain: Self.errorDomain,
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Unable to open the temporary segment file."]
+            )
+            return .cancel
+        }
+
         stream.open()
-        outputStreams[dataTask.taskIdentifier] = stream
+        outputStreams[taskID] = stream
         return .allow
     }
 
@@ -493,50 +616,66 @@ extension HTTPDownloadEngine: URLSessionDownloadDelegate, URLSessionDataDelegate
     ///
     /// 分段全部完成後會合併檔案；單連線失敗會重試；分段失敗只重試該段。
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        defer {
-            taskPurposes[task.taskIdentifier] = nil
-            outputStreams.removeValue(forKey: task.taskIdentifier)?.close()
+        let taskID = task.taskIdentifier
+        let launchedSegmentConnectionLimit = segmentConnectionLimitByTaskID.removeValue(forKey: taskID)
+        let responseError = segmentResponseErrorsByTaskID.removeValue(forKey: taskID)
+        let effectiveError = responseError ?? error
+
+        if case let .segment(id, _)? = taskPurposes[taskID] {
+            activeSegmentTaskIDs[id]?.remove(taskID)
         }
 
-        if let error {
-            let nsError = error as NSError
-            guard nsError.code != NSURLErrorCancelled else { return }
+        defer {
+            taskPurposes[taskID] = nil
+            segmentStartOffsetsByTaskID[taskID] = nil
+            outputStreams.removeValue(forKey: taskID)?.close()
+        }
 
-            switch taskPurposes[task.taskIdentifier] {
+        if let effectiveError {
+            let nsError = effectiveError as NSError
+            guard nsError.code != NSURLErrorCancelled || responseError != nil else { return }
+
+            switch taskPurposes[taskID] {
             case let .single(id):
                 if switchingToSegmentedIDs.remove(id) != nil {
                     return
                 }
-                retrySingleDownload(id: id, error: error)
+                retrySingleDownload(id: id, error: effectiveError)
             case let .segment(id, index):
-                retrySegmentDownload(id: id, index: index, error: error)
+                if nsError.domain == Self.errorDomain,
+                   nsError.code == Self.fallbackToSingleErrorCode {
+                    fallbackSegmentedDownloadToSingle(id: id)
+                } else if nsError.domain == Self.errorDomain,
+                          nsError.code == Self.retryableResponseErrorCode {
+                    if (nsError.userInfo["HTTPStatus"] as? Int) == 429 {
+                        let requestLimit = launchedSegmentConnectionLimit
+                            ?? segmentConnectionLimits[id]
+                            ?? Self.segmentedThreadCount
+                        let downgradedLimit = requestLimit >= Self.segmentedThreadCount ? 2 : 1
+                        let currentLimit = segmentConnectionLimits[id] ?? Self.segmentedThreadCount
+                        segmentConnectionLimits[id] = min(currentLimit, downgradedLimit)
+                    }
+                    scheduleSegmentRetry(id: id, index: index, error: effectiveError)
+                } else if nsError.domain == Self.errorDomain,
+                          nsError.code == Self.permanentResponseErrorCode {
+                    cleanupSegmentedDownload(id: id)
+                    fail(id: id, error: effectiveError)
+                } else {
+                    handleSegmentCompletion(id: id, index: index, error: effectiveError)
+                }
             case nil:
                 break
             }
             return
         }
 
-        if case let .single(id)? = taskPurposes[task.taskIdentifier] {
+        if case let .single(id)? = taskPurposes[taskID] {
             completeSingleDownload(id: id)
             return
         }
 
-        guard case let .segment(id, index)? = taskPurposes[task.taskIdentifier],
-              var state = segmentedDownloads[id],
-              var segment = state.segments[index]
-        else { return }
-
-        segment.isFinished = true
-        state.segments[index] = segment
-        segmentedDownloads[id] = state
-
-        if state.segments.values.allSatisfy(\.isFinished) {
-            do {
-                try mergeSegmentedDownload(id: id)
-            } catch {
-                cleanupSegmentedDownload(id: id)
-                fail(id: id, error: error)
-            }
+        if case let .segment(id, index)? = taskPurposes[taskID] {
+            handleSegmentCompletion(id: id, index: index, error: nil)
         }
     }
 }
@@ -745,10 +884,11 @@ private extension HTTPDownloadEngine {
             state.segments[index] = resumedSegment
 
             var request = downloadRequest(for: state.item.source)
-            request.setValue("bytes=\(nextByte)-\(segment.range.upperBound)", forHTTPHeaderField: "Range")
+            setByteRange("bytes=\(nextByte)-\(segment.range.upperBound)", on: &request)
 
             let task = session.dataTask(with: request)
             taskPurposes[task.taskIdentifier] = .segment(id, index)
+            segmentStartOffsetsByTaskID[task.taskIdentifier] = nextByte
             tasks.append(task)
         }
 
@@ -771,9 +911,9 @@ private extension HTTPDownloadEngine {
             return
         }
 
-        notifyStatus(id: id, message: "\(Self.segmentedThreadCount) connections")
+        notifyStatus(id: id, message: segmentConnectionStatus(id: id))
         updateProgress(id: id, received: received, expected: state.totalBytes)
-        tasks.forEach { $0.resume() }
+        enqueueSegmentTasks(tasks, id: id)
     }
 
     /// 關閉某個 item 相關的分段 output stream。
@@ -788,6 +928,9 @@ private extension HTTPDownloadEngine {
         for taskID in taskIDs {
             outputStreams.removeValue(forKey: taskID)?.close()
             taskPurposes[taskID] = nil
+            segmentStartOffsetsByTaskID[taskID] = nil
+            segmentResponseErrorsByTaskID[taskID] = nil
+            segmentConnectionLimitByTaskID[taskID] = nil
         }
     }
 
@@ -809,8 +952,11 @@ private extension HTTPDownloadEngine {
 
     /// 清理分段下載狀態與 `.part-N.tmp`。
     func cleanupSegmentedDownload(id: DownloadItem.ID) {
+        cancelScheduledSegmentRetries(id: id)
         dataTasksByID[id]?.forEach { $0.cancel() }
         dataTasksByID[id] = nil
+        activeSegmentTaskIDs[id] = nil
+        segmentConnectionLimits[id] = nil
         closeSegmentStreams(for: id)
 
         if let state = segmentedDownloads[id] {
@@ -832,6 +978,9 @@ private extension HTTPDownloadEngine {
         removeIncompleteFile(id: id)
         itemsByID[id] = nil
         retryCounts[id] = nil
+        segmentRetryCounts[id] = nil
+        activeSegmentTaskIDs[id] = nil
+        segmentConnectionLimits[id] = nil
         lastSamples[id] = nil
         displayedSpeeds[id] = nil
         singleTargetURLsByID[id] = nil
@@ -858,6 +1007,10 @@ private extension HTTPDownloadEngine {
         dataTasksByID[id] = nil
         itemsByID[id] = nil
         retryCounts[id] = nil
+        segmentRetryCounts[id] = nil
+        cancelScheduledSegmentRetries(id: id)
+        activeSegmentTaskIDs[id] = nil
+        segmentConnectionLimits[id] = nil
         lastSamples[id] = nil
         displayedSpeeds[id] = nil
         singleTargetURLsByID[id] = nil
@@ -897,42 +1050,179 @@ private extension HTTPDownloadEngine {
         startSingleDownload(item: item)
     }
 
-    /// 分段下載其中一段失敗時，只重試該段。
-    ///
-    /// 這樣下載一旦成功升級成 4 connections，就會保持分段模式；
-    /// 不會因為某一段短暫斷線而整個退回 1 connection。
-    func retrySegmentDownload(id: DownloadItem.ID, index: Int, error: Error) {
-        guard var state = segmentedDownloads[id],
-              var segment = state.segments[index]
-        else {
-            fail(id: id, error: error)
-            return
-        }
+    /// Server 無法穩定提供 Range 時，清理所有分段並從單線重新開始。
+    func fallbackSegmentedDownloadToSingle(id: DownloadItem.ID) {
+        guard let item = segmentedDownloads[id]?.item else { return }
 
-        let nextRetry = (retryCounts[id] ?? 0) + 1
+        cleanupSegmentedDownload(id: id)
+        incompleteFilesByID[id] = nil
+        singleExpectedBytesByID[id] = nil
+        singleReceivedBytesByID[id] = nil
+        segmentRetryCounts[id] = nil
+        lastSamples[id] = nil
+        displayedSpeeds[id] = nil
+        resetTransferTiming(id: id, received: 0)
+        switchingToSegmentedIDs.remove(id)
+        notifyStatus(id: id, message: "Single connection")
+        startSingleDownload(item: item)
+    }
+
+    /// 暫時性 HTTP 錯誤保留分段狀態，稍後只重試受影響的分段。
+    func scheduleSegmentRetry(id: DownloadItem.ID, index: Int, error: Error) {
+        let currentRetry = segmentRetryCounts[id]?[index] ?? 0
+        let nextRetry = currentRetry + 1
         guard nextRetry <= Self.maximumRetryCount else {
             fail(id: id, error: error)
             return
         }
 
-        retryCounts[id] = nextRetry
+        let serverDelay = (error as NSError).userInfo["RetryAfter"] as? TimeInterval ?? 0
+        let backoffDelay = pow(2, Double(currentRetry))
+        let delay = max(serverDelay, backoffDelay)
+        notifyStatus(id: id, message: "Retrying connection \(nextRetry)/\(Self.maximumRetryCount)")
 
-        let nextByte = segment.range.lowerBound + segment.received
-        guard nextByte <= segment.range.upperBound else {
+        scheduledSegmentStarts[id]?[index]?.cancel()
+        let retryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self else { return }
+
+            self.scheduledSegmentStarts[id]?[index] = nil
+            self.retrySegmentDownload(id: id, index: index, error: error)
+        }
+        scheduledSegmentStarts[id, default: [:]][index] = retryTask
+    }
+
+    func cancelScheduledSegmentRetries(id: DownloadItem.ID) {
+        scheduledSegmentStarts[id]?.values.forEach { $0.cancel() }
+        scheduledSegmentStarts[id] = nil
+    }
+
+    /// 初始分段錯開 0.4 秒啟動；降級後等待現有 task 釋放名額。
+    func enqueueSegmentTasks(_ tasks: [URLSessionDataTask], id: DownloadItem.ID) {
+        for (offset, task) in tasks.enumerated() {
+            guard case let .segment(_, index)? = taskPurposes[task.taskIdentifier] else { continue }
+            enqueueSegmentTask(task, id: id, index: index, delay: Double(offset) * 0.4)
+        }
+    }
+
+    func enqueueSegmentTask(
+        _ task: URLSessionDataTask,
+        id: DownloadItem.ID,
+        index: Int,
+        delay: TimeInterval = 0
+    ) {
+        scheduledSegmentStarts[id]?[index]?.cancel()
+        let startTask = Task { @MainActor [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+            }
+
+            guard !Task.isCancelled, let self else { return }
+            while self.activeSegmentTaskIDs[id, default: []].count
+                >= (self.segmentConnectionLimits[id] ?? Self.segmentedThreadCount) {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+            }
+
+            self.scheduledSegmentStarts[id]?[index] = nil
+            self.segmentConnectionLimitByTaskID[task.taskIdentifier] =
+                self.segmentConnectionLimits[id] ?? Self.segmentedThreadCount
+            self.activeSegmentTaskIDs[id, default: []].insert(task.taskIdentifier)
+            task.resume()
+        }
+        scheduledSegmentStarts[id, default: [:]][index] = startTask
+    }
+
+    /// 驗證分段是否真的完整；完整後檢查能否合併，否則續傳缺少的 bytes。
+    func handleSegmentCompletion(id: DownloadItem.ID, index: Int, error: Error?) {
+        guard var state = segmentedDownloads[id],
+              var segment = state.segments[index]
+        else {
+            if let error {
+                fail(id: id, error: error)
+            }
+            return
+        }
+
+        let expectedBytes = segment.range.upperBound - segment.range.lowerBound + 1
+        if segment.received == expectedBytes {
             segment.isFinished = true
             state.segments[index] = segment
             segmentedDownloads[id] = state
+            segmentRetryCounts[id]?[index] = nil
+
+            if state.segments.values.allSatisfy(\.isFinished) {
+                do {
+                    try mergeSegmentedDownload(id: id)
+                } catch {
+                    cleanupSegmentedDownload(id: id)
+                    fail(id: id, error: error)
+                }
+            }
+            return
+        }
+
+        let completionError: Error
+        if segment.received > expectedBytes {
+            completionError = NSError(
+                domain: Self.errorDomain,
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Server returned more bytes than requested."]
+            )
+            cleanupSegmentedDownload(id: id)
+            fail(id: id, error: completionError)
+            return
+        } else {
+            completionError = error ?? NSError(
+                domain: Self.errorDomain,
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "The connection ended before the segment was complete."]
+            )
+        }
+
+        retrySegmentDownload(id: id, index: index, error: completionError)
+    }
+
+    /// 分段下載其中一段失敗時，只重試該段。
+    ///
+    /// 下載會保持分段模式，並只補回該段尚未完成的 byte range；
+    /// 即使連線數降至 1，也不會刪除已下載資料或由頭開始。
+    func retrySegmentDownload(id: DownloadItem.ID, index: Int, error: Error) {
+        guard let state = segmentedDownloads[id],
+              let segment = state.segments[index]
+        else {
+            fail(id: id, error: error)
+            return
+        }
+
+        let nextRetry = (segmentRetryCounts[id]?[index] ?? 0) + 1
+        guard nextRetry <= Self.maximumRetryCount else {
+            fail(id: id, error: error)
+            return
+        }
+
+        segmentRetryCounts[id, default: [:]][index] = nextRetry
+
+        let nextByte = segment.range.lowerBound + segment.received
+        guard nextByte <= segment.range.upperBound else {
+            handleSegmentCompletion(id: id, index: index, error: nil)
             return
         }
 
         var request = downloadRequest(for: state.item.source)
-        request.setValue("bytes=\(nextByte)-\(segment.range.upperBound)", forHTTPHeaderField: "Range")
+        setByteRange("bytes=\(nextByte)-\(segment.range.upperBound)", on: &request)
 
         let task = session.dataTask(with: request)
         taskPurposes[task.taskIdentifier] = .segment(id, index)
+        segmentStartOffsetsByTaskID[task.taskIdentifier] = nextByte
         dataTasksByID[id, default: []].append(task)
-        notifyStatus(id: id, message: "\(Self.segmentedThreadCount) connections")
-        task.resume()
+        notifyStatus(id: id, message: segmentConnectionStatus(id: id))
+        enqueueSegmentTask(task, id: id, index: index)
+    }
+
+    func segmentConnectionStatus(id: DownloadItem.ID) -> String {
+        let connectionCount = segmentConnectionLimits[id] ?? Self.segmentedThreadCount
+        return connectionCount == 1 ? "1 connection" : "\(connectionCount) connections"
     }
 
     /// 建立下載 request，集中設定 User-Agent、Accept、timeout。
@@ -945,11 +1235,45 @@ private extension HTTPDownloadEngine {
         return request
     }
 
+    /// Range request 不可使用普通 GET 的快取，亦不可接受會改變 byte offsets 的內容壓縮。
+    func setByteRange(_ value: String, on request: inout URLRequest) {
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue(value, forHTTPHeaderField: "Range")
+        request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+    }
+
+    /// `Retry-After` 可以是秒數；沒有或無法解析時由本地 exponential backoff 決定。
+    func retryDelay(from response: HTTPURLResponse) -> TimeInterval {
+        guard let value = response.value(forHTTPHeaderField: "Retry-After"),
+              let delay = TimeInterval(value)
+        else { return 0 }
+        return max(0, delay)
+    }
+
     /// 從 Content-Range 解析總大小，例如 `bytes 0-0/104857600`。
     func totalBytes(fromContentRange contentRange: String) -> Int64? {
         guard let slashIndex = contentRange.lastIndex(of: "/") else { return nil }
         let total = contentRange[contentRange.index(after: slashIndex)...]
         return Int64(total)
+    }
+
+    /// 解析完整 Content-Range，例如 `bytes 26214400-52428799/104857600`。
+    func byteRange(fromContentRange contentRange: String) -> (start: Int64, end: Int64, total: Int64)? {
+        let value = contentRange.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.lowercased().hasPrefix("bytes ") else { return nil }
+
+        let rangeAndTotal = value.dropFirst(6).split(separator: "/", maxSplits: 1)
+        guard rangeAndTotal.count == 2,
+              let total = Int64(rangeAndTotal[1])
+        else { return nil }
+
+        let bounds = rangeAndTotal[0].split(separator: "-", maxSplits: 1)
+        guard bounds.count == 2,
+              let start = Int64(bounds[0]),
+              let end = Int64(bounds[1])
+        else { return nil }
+
+        return (start, end, total)
     }
 
     /// 取得檔案大小；檔案不存在時回傳 0。

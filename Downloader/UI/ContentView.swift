@@ -133,8 +133,9 @@ struct ContentView: View {
     private func handleExternalURL(_ incomingURL: URL) {
         if incomingURL.isFileURL, incomingURL.pathExtension.lowercased() == "torrent" {
             let destination = FolderBookmarkStore.lastFolder()
-            downloadManager.add(url: incomingURL, destination: destination)
-            bringDownloaderToFront()
+            addExternalDownloads([
+                (url: incomingURL, kind: nil, name: nil)
+            ], destination: destination)
             return
         }
 
@@ -149,7 +150,9 @@ struct ContentView: View {
 
         guard let downloadURL = URLSchemeHandler.downloadURL(from: incomingURL) else { return }
         let destination = FolderBookmarkStore.lastFolder()
-        downloadManager.add(url: downloadURL, destination: destination)
+        addExternalDownloads([
+            (url: downloadURL, kind: nil, name: nil)
+        ], destination: destination)
     }
 
     /// 讀取 Safari native extension 寫入 App Group 的下載 queue。
@@ -158,6 +161,7 @@ struct ContentView: View {
         struct PendingSafariDownload: Codable {
             let url: String
             let kind: String?
+            let name: String?
         }
 
         let appGroupIdentifier = "group.com.sunnyyu.Downloader"
@@ -175,7 +179,7 @@ struct ContentView: View {
         if let queuedDownloads = try? JSONDecoder().decode([PendingSafariDownload].self, from: data) {
             downloads = queuedDownloads
         } else if let legacyLinks = try? JSONDecoder().decode([String].self, from: data) {
-            downloads = legacyLinks.map { PendingSafariDownload(url: $0, kind: nil) }
+            downloads = legacyLinks.map { PendingSafariDownload(url: $0, kind: nil, name: nil) }
         } else {
             return false
         }
@@ -186,15 +190,44 @@ struct ContentView: View {
             try? emptyQueue.write(to: queueURL, options: .atomic)
         }
 
-        let destination = FolderBookmarkStore.lastFolder()
-        for download in downloads {
-            guard let url = URL(string: download.url) else { continue }
-            let kind = download.kind.flatMap(DownloadKind.init(rawValue:))
-            downloadManager.add(url: url, destination: destination, kind: kind)
+        let pendingDownloads = downloads.compactMap { download -> ExternalDownload? in
+            guard let url = URL(string: download.url) else { return nil }
+            return ExternalDownload(
+                url: url,
+                kind: download.kind.flatMap(DownloadKind.init(rawValue:)),
+                name: download.name
+            )
         }
+        guard !pendingDownloads.isEmpty else { return false }
 
-        bringDownloaderToFront()
+        addExternalDownloads(
+            pendingDownloads.map { (url: $0.url, kind: $0.kind, name: $0.name) },
+            destination: FolderBookmarkStore.lastFolder()
+        )
         return true
+    }
+
+    /// 外部下載先切到 All，待 Table 完成 filter 更新後才新增並選取項目。
+    private func addExternalDownloads(
+        _ downloads: [(url: URL, kind: DownloadKind?, name: String?)],
+        destination: URL?
+    ) {
+        selection = .all
+
+        Task { @MainActor in
+            await Task.yield()
+
+            for download in downloads {
+                downloadManager.add(
+                    url: download.url,
+                    destination: destination,
+                    kind: download.kind,
+                    name: download.name
+                )
+            }
+
+            bringDownloaderToFront()
+        }
     }
 
     /// 把 Downloader 視窗帶到前景，給 Safari native extension 匯入下載後使用。
@@ -208,6 +241,12 @@ struct ContentView: View {
             NSApp.activate(ignoringOtherApps: true)
         }
     }
+}
+
+private struct ExternalDownload {
+    let url: URL
+    let kind: DownloadKind?
+    let name: String?
 }
 
 extension Notification.Name {

@@ -273,7 +273,7 @@ private extension View {
 
                 Button(role: .destructive) {
                     // All/Active/Paused/Completed 分頁是移到 Trash；
-                    // Trash 分頁內再次 Delete 才會永久刪除列表項目。
+                    // Trash 分頁內再次 Delete 會同時把本機檔案移到 macOS Trash。
                     downloadManager.selectForContextMenu(item)
                     downloadManager.deleteSelected()
                 } label: {

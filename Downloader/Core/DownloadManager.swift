@@ -63,12 +63,21 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     /// 新增一個下載任務，並立即開始下載。
-    func add(url: URL, destination: URL?, kind requestedKind: DownloadKind? = nil) {
+    func add(
+        url: URL,
+        destination: URL?,
+        kind requestedKind: DownloadKind? = nil,
+        name requestedName: String? = nil
+    ) {
         // 用 URL 形式判斷下載類型：magnet 和 .torrent 交給 BT engine，其他交給 HTTP。
         let kind: DownloadKind = requestedKind
             ?? (url.absoluteString.hasPrefix("magnet:") || url.pathExtension.lowercased() == "torrent" ? .torrent : .http)
+        let displayName = requestedName
+            .map { URL(fileURLWithPath: $0).lastPathComponent }
+            .flatMap { $0.isEmpty ? nil : $0 }
+            ?? Self.displayName(for: url)
         var item = DownloadItem(
-            name: Self.displayName(for: url),
+            name: displayName,
             source: url,
             destination: destination,
             kind: kind
@@ -264,7 +273,10 @@ final class DownloadManager: NSObject, ObservableObject {
         guard !itemsToDelete.isEmpty else { return }
 
         if itemsToDelete.allSatisfy(\.isTrashed) {
-            permanentlyDeleteSelected()
+            guard confirmDeleteWithFiles(count: itemsToDelete.count) else { return }
+            Task { @MainActor in
+                await deleteItemsWithFiles(itemsToDelete)
+            }
             return
         }
 
@@ -339,22 +351,6 @@ final class DownloadManager: NSObject, ObservableObject {
             selectedItemIDs = Set(items.prefix(1).map(\.id))
         }
 
-        store.save(items)
-    }
-
-    /// 真正刪除 Trash 內的項目。
-    ///
-    /// 只有 item 已經在 Trash 時才會走到這裡；正常列表的 Delete 仍然只是軟刪除。
-    private func permanentlyDeleteSelected() {
-        let ids = selectedItemIDs
-        guard !ids.isEmpty else { return }
-
-        for item in items where ids.contains(item.id) {
-            cancelDownload(for: item)
-        }
-
-        items.removeAll { ids.contains($0.id) }
-        selectedItemIDs = Set(items.filter(\.isTrashed).prefix(1).map(\.id))
         store.save(items)
     }
 

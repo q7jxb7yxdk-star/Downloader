@@ -128,7 +128,8 @@ The Trash sidebar keeps deleted tasks temporarily.
 
 - Delete outside Trash: move selected tasks to Trash.
 - Restore inside Trash: move tasks back to their original list state.
-- Delete inside Trash: permanently remove tasks from the list.
+- Delete inside Trash: move associated HTTP or BT files to the macOS Trash,
+  then permanently remove successful tasks from the list.
 
 ### Delete with Files
 
