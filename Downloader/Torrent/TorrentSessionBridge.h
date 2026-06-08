@@ -31,8 +31,20 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)pauseAllFiles:(NSString *)identifier;
 /// Returns file index, path, and size after metadata is available.
 - (NSArray<NSDictionary<NSString *, id> *> *)filesForIdentifier:(NSString *)identifier;
+/// Returns file index, original path, size, and downloaded bytes.
+- (NSArray<NSDictionary<NSString *, id> *> *)fileProgressForIdentifier:(NSString *)identifier;
+/// Returns file index and current libtorrent download priority.
+- (NSArray<NSDictionary<NSString *, id> *> *)filePrioritiesForIdentifier:(NSString *)identifier;
 /// Applies selected file priorities and starts real payload download.
-- (void)setSelectedFileIndexes:(NSIndexSet *)indexes forIdentifier:(NSString *)identifier;
+- (void)setSelectedFileIndexes:(NSIndexSet *)indexes
+                 forIdentifier:(NSString *)identifier
+                  forceRecheck:(BOOL)forceRecheck;
+/// Returns torrent identifiers whose file-priority update has completed.
+- (NSArray<NSString *> *)drainFilePriorityAlertIdentifiers;
+/// Nudges libtorrent to request pieces from each selected file after reselection.
+- (void)activateSelectedFilePieces:(NSIndexSet *)indexes forIdentifier:(NSString *)identifier;
+/// Starts a disk recheck without changing file priorities.
+- (void)forceRecheck:(NSString *)identifier;
 /// Returns a dictionary snapshot of torrent status, including paused state, for Swift polling.
 - (NSDictionary<NSString *, id> *)statusForIdentifier:(NSString *)identifier;
 @end

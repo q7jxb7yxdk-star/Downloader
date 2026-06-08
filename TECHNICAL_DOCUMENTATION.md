@@ -65,10 +65,13 @@ Important fields:
 - `statusBeforeTrash`: original status used when restoring from Trash.
 - `errorMessage`: error text, also reused for status details such as seeds/peers.
 - `httpConnectionDetails`: transient HTTP connection progress used by the table UI.
+- `torrentFileDetails`: transient BT selected-file progress used by the table UI.
 
 `DownloadItem` has a custom `Codable` decoder so older `downloads.json` files can still load after new fields are added.
 `httpConnectionDetails` is intentionally excluded from `CodingKeys`, so live
 connection rows are never written to `downloads.json`.
+`torrentFileDetails` is also excluded from `CodingKeys`; it is rebuilt from
+libtorrent polling while the app is running.
 
 ## DownloadManager
 
@@ -282,6 +285,11 @@ segments. Display labels are renumbered as `Thread 1`, `Thread 2`, and so on,
 so a server reduced to two connections shows two rows instead of four inactive
 rows.
 
+The table displays only these visible connection rows for active HTTP
+downloads. It does not show a separate overall progress row or total download
+speed row while connection details are visible. Completed, paused, and
+non-segmented rows still use the normal compact summary display.
+
 ### Pause and Resume
 
 Single connection resume:
@@ -368,6 +376,20 @@ After the user clicks `Start Selected Files`:
 - `upload_mode` is cleared.
 - The torrent resumes and reannounces.
 
+When the user opens `Select Files` again on an active torrent, the sheet is
+preselected with the current saved file indexes. Applying a new selection sends
+the full selected index set back to libtorrent, waits for `file_prio_alert`,
+then reads back file priorities to confirm every selected file is no longer
+`dont_download`. If the priorities have not applied yet, Downloader reapplies
+the selection and reannounces.
+
+After active reselection is confirmed, Downloader nudges the selected files by
+setting `top_priority` and short deadlines on several not-yet-complete pieces
+near each selected file's current progress. This helps newly added files enter
+libtorrent's request queue instead of waiting behind the originally selected
+file. BT throughput still depends on peers and piece availability, so perfectly
+equal per-file speed is not guaranteed.
+
 ### BT Speed Display
 
 libtorrent exposes:
@@ -377,14 +399,17 @@ libtorrent exposes:
 
 Downloader displays `download_payload_rate`, so metadata discovery traffic does not look like real file download speed.
 
-For active BT downloads, the Speed column shows download speed and upload speed on two lines:
+For active BT downloads, the Name column shows each selected file as a filename
+row followed by that file's progress, percentage, and downloaded size / total
+size. The Speed column aligns with those rows and shows the selected file's
+current payload download speed.
 
 ```text
-↓ 12.4 MiB/s
-↑ 512 KiB/s
+12.4 MiB/s
 ```
 
-After completion, the same column shows average download and upload speeds:
+After completion, the same column collapses to average download and upload
+speeds:
 
 ```text
 Avg ↓ 12.4 MiB/s
@@ -397,7 +422,7 @@ While seeding, the Speed column adds the current upload speed:
 ```text
 Avg ↓ 12.4 MiB/s
 Avg ↑ 512 KiB/s
-Now ↑ 128 KiB/s
+Seeding ↑ 128 KiB/s
 ```
 
 The Status column shows:
@@ -639,12 +664,11 @@ and connection candidates remain visible. `Speed` and `ETA` are narrower
 because their values use compact, predictable formats.
 
 The minimum table width is `1100` points. Active HTTP rows expand below the
-overall progress summary:
+filename:
 
 - The Name column shows each visible Thread's progress, percentage, and
   transferred size / segment size.
-- The Speed column shows `Total` followed by the corresponding per-Thread
-  speeds.
+- The Speed column shows the corresponding per-Thread speeds.
 - Thread labels appear only in the Name column; Speed values are left-aligned
   to keep the narrow Speed column compact.
 - Completed HTTP downloads collapse back to the normal single-row display.

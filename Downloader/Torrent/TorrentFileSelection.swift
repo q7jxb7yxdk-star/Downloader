@@ -16,6 +16,8 @@ struct TorrentFileSelection: Identifiable {
     let itemID: DownloadItem.ID
     let title: String
     let files: [TorrentFileEntry]
+    let selectedIndexes: Set<Int>
+    let isReselection: Bool
 
     var id: DownloadItem.ID { itemID }
 }

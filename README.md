@@ -16,7 +16,7 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - Completed BT downloads show average download/upload speeds and the current seeding upload speed.
 - Double-click a completed item to reveal it in Finder.
 - Downloads table shows name, progress, percentage, downloaded size / total size, speed, ETA, and status.
-- Active HTTP downloads show overall progress plus per-connection progress, transferred size, and speed.
+- Active HTTP downloads show per-connection progress, transferred size, and speed.
 - While downloading, ETA shows the estimated remaining time. After completion, it shows the accumulated active download time, excluding paused time.
 - Right-click actions: Resume, Pause, Show in Finder, Delete, Delete with Files.
 - Download completion notification and system sound.
@@ -123,6 +123,11 @@ For a completed BT download:
 - Status shows `Completed | Waiting for peers` while the torrent is ready but no payload is being uploaded.
 - Status shows `Completed | Seeding` only while payload is actively being uploaded, and `Completed` while paused.
 
+During an active BT download, `Select Files` can be used again to add or remove
+selected torrent files. Downloader reapplies file priorities and nudges the
+selected files' pieces so newly added files can start downloading without
+waiting for the original file to finish.
+
 ### Trash
 
 The Trash sidebar keeps deleted tasks temporarily.
@@ -146,8 +151,14 @@ If the server supports Range and the file is large enough, Downloader upgrades t
 
 Segmented downloads start with up to four connections. If the server limits
 parallel Range requests, Downloader progressively reduces the active limit from
-4 to 2 to 1 without discarding downloaded segments. The table shows only the
-currently usable connections and prioritizes active or unfinished segments.
+4 to 2 to 1 without discarding downloaded segments. If the server only allows
+one connection, Downloader continues with one active thread. The table shows
+only the currently usable connections and prioritizes active or unfinished
+segments.
+
+During active segmented downloads, the table shows one progress row and one
+speed row per visible connection. It does not show a separate overall progress
+bar or total download speed row.
 
 Pausing keeps the `.part-N.tmp` files. Resuming requests only the missing byte
 ranges and clears stale cancelled-task slots before restarting the connections.

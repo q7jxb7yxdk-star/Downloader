@@ -114,15 +114,24 @@ function downloadRequest(event) {
       return null;
     }
 
-    const torrent = isTorrentElement(link, url);
-    if (torrent || link.hasAttribute("download") || isKnownDownloadURL(url)) {
+    if (torrentURLPattern(url)) {
       return {
         url: url.href,
-        kind: torrent ? "torrent" : null
+        kind: "torrent"
       };
     }
 
-    if (isProbableDownloadEndpoint(url)) {
+    if (link.hasAttribute("download") || isKnownDownloadURL(url)) {
+      return {
+        url: url.href,
+        kind: null
+      };
+    }
+
+    // A link label such as "torrent download" is only a hint. Some sites use
+    // an HTML landing page whose URL and text look like a torrent download.
+    // Probe the response before handing it to Downloader.
+    if (isTorrentElement(link) || isProbableDownloadEndpoint(url)) {
       return {
         url: url.href,
         kind: "probe"
@@ -140,9 +149,16 @@ function downloadRequest(event) {
     return null;
   }
 
+  if (torrentURLPattern(url)) {
+    return {
+      url: url.href,
+      kind: "torrent"
+    };
+  }
+
   return {
     url: url.href,
-    kind: "torrent"
+    kind: "probe"
   };
 }
 

@@ -12,8 +12,12 @@ struct TorrentFileSelectionSheet: View {
 
     init(selection: TorrentFileSelection) {
         self.selection = selection
-        // 預設全選，這是多數下載器的常見行為。
-        _selectedIndexes = State(initialValue: Set(selection.files.map(\.index)))
+        // 首次選檔預設全選；重新選檔則保留目前選擇。
+        _selectedIndexes = State(
+            initialValue: selection.isReselection
+                ? selection.selectedIndexes
+                : Set(selection.files.map(\.index))
+        )
     }
 
     var body: some View {
@@ -44,8 +48,11 @@ struct TorrentFileSelectionSheet: View {
                 Toggle(isOn: binding(for: file.index)) {
                     HStack {
                         // 這裡顯示 torrent 內的原始相對路徑，可能包含資料夾名稱。
-                        Text(file.path)
-                            .lineLimit(1)
+                        AdaptiveTooltipText(
+                            file.path,
+                            tooltipWidth: 1240,
+                            tooltipLineLimit: 2
+                        )
 
                         Spacer()
 
@@ -62,17 +69,20 @@ struct TorrentFileSelectionSheet: View {
                 Spacer()
 
                 Button("Cancel") {
-                    downloadManager.cancelTorrentFileSelection(itemID: selection.itemID)
+                    downloadManager.cancelTorrentFileSelection(
+                        itemID: selection.itemID,
+                        isReselection: selection.isReselection
+                    )
                 }
                 .keyboardShortcut(.cancelAction)
                 .help("Cancel")
 
-                Button("Start Selected Files") {
+                Button(selection.isReselection ? "Apply Selection" : "Start Selected Files") {
                     downloadManager.chooseTorrentFiles(itemID: selection.itemID, indexes: selectedIndexes)
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(selectedIndexes.isEmpty)
-                .help("Start Selected Files")
+                .help(selection.isReselection ? "Apply Selection" : "Start Selected Files")
             }
         }
         .padding(24)

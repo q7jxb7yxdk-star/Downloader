@@ -62,6 +62,22 @@ struct HTTPConnectionDetail: Identifiable, Hashable {
     }
 }
 
+/// BT 下載中一個已選檔案的即時狀態。
+///
+/// 和 HTTP connection details 一樣，這些資料只供 UI 使用，不會持久化。
+struct TorrentFileDetail: Identifiable, Hashable {
+    let id: Int
+    let path: String
+    var bytesReceived: Int64
+    let bytesExpected: Int64
+    var bytesPerSecond: Int64
+
+    var progress: Double {
+        guard bytesExpected > 0 else { return 0 }
+        return min(max(Double(bytesReceived) / Double(bytesExpected), 0), 1)
+    }
+}
+
 /// 一個下載任務的完整資料模型。
 ///
 /// 這個 struct 同時服務三個地方：
@@ -102,6 +118,8 @@ struct DownloadItem: Identifiable, Codable, Hashable {
     var createdAt = Date()
     /// HTTP 各連線的即時進度；刻意不加入 CodingKeys。
     var httpConnectionDetails: [HTTPConnectionDetail] = []
+    /// BT 已選檔案的即時進度；刻意不加入 CodingKeys。
+    var torrentFileDetails: [TorrentFileDetail] = []
 
     /// 明確列出 CodingKeys，方便日後新增欄位時保持向下兼容。
     enum CodingKeys: String, CodingKey {
@@ -153,7 +171,8 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         statusBeforeTrash: DownloadStatus? = nil,
         errorMessage: String? = nil,
         createdAt: Date = Date(),
-        httpConnectionDetails: [HTTPConnectionDetail] = []
+        httpConnectionDetails: [HTTPConnectionDetail] = [],
+        torrentFileDetails: [TorrentFileDetail] = []
     ) {
         self.id = id
         self.name = name
@@ -178,6 +197,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         self.errorMessage = errorMessage
         self.createdAt = createdAt
         self.httpConnectionDetails = httpConnectionDetails
+        self.torrentFileDetails = torrentFileDetails
     }
 
     /// 自訂解碼器的目的，是讓舊版本保存的 JSON 缺少新欄位時仍能讀取。
@@ -208,6 +228,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
         errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         httpConnectionDetails = []
+        torrentFileDetails = []
     }
 
     /// 列表中顯示的速度文字。
@@ -226,7 +247,7 @@ struct DownloadItem: Identifiable, Codable, Hashable {
             let averageText = "Avg ↓ " + downloadText + "\nAvg ↑ " + uploadText
             guard isTorrentSeeding, uploadBytesPerSecond > 0 else { return averageText }
             let currentUploadText = ByteCountFormatter.string(fromByteCount: uploadBytesPerSecond, countStyle: .binary) + "/s"
-            return averageText + "\nNow ↑ " + currentUploadText
+            return averageText + "\nSeeding ↑ " + currentUploadText
         case .completed where averageBytesPerSecond > 0:
             return "Avg " + ByteCountFormatter.string(fromByteCount: averageBytesPerSecond, countStyle: .binary) + "/s"
         default:

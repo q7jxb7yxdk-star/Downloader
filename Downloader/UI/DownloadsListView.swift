@@ -33,8 +33,28 @@ struct DownloadsListView: View {
                             Image(systemName: item.kind.icon)
                                 .foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 2) {
-                                AdaptiveTooltipText(item.name)
-                                ProgressSummaryView(item: item)
+                                if item.kind == .torrent, !item.torrentFileDetails.isEmpty {
+                                    TorrentFileProgressView(files: item.torrentFileDetails)
+                                } else if item.kind != .torrent {
+                                    AdaptiveTooltipText(item.name)
+                                } else if !item.selectedTorrentFilePaths.isEmpty {
+                                    ForEach(Array(item.selectedTorrentFilePaths.enumerated()), id: \.offset) { _, path in
+                                        AdaptiveTooltipText(
+                                            path,
+                                            tooltipWidth: 1240,
+                                            tooltipLineLimit: 2
+                                        )
+                                    }
+                                } else {
+                                    Text("No files selected")
+                                        .foregroundStyle(.secondary)
+                                }
+                                if (item.kind != .torrent || item.torrentFileDetails.isEmpty)
+                                    && !(item.kind == .http
+                                         && item.status != .completed
+                                         && !item.httpConnectionDetails.isEmpty) {
+                                    ProgressSummaryView(item: item)
+                                }
                                 if item.kind == .http,
                                    item.status != .completed,
                                    !item.httpConnectionDetails.isEmpty {
@@ -164,11 +184,6 @@ private struct HTTPDownloadSpeedView: View {
                     Color.clear
                         .frame(height: HTTPDetailLayout.nameRowHeight)
 
-                    Text("Total  \(item.speedText)")
-                        .font(.caption)
-                        .monospacedDigit()
-                        .frame(height: HTTPDetailLayout.rowHeight, alignment: .leading)
-
                     VStack(alignment: .leading, spacing: HTTPDetailLayout.rowSpacing) {
                         ForEach(item.httpConnectionDetails) { connection in
                             Text(connection.speedText)
@@ -176,6 +191,23 @@ private struct HTTPDownloadSpeedView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .font(.caption)
                                 .frame(height: HTTPDetailLayout.rowHeight)
+                        }
+                    }
+                }
+            } else if item.kind == .torrent,
+                      item.status != .completed,
+                      !item.torrentFileDetails.isEmpty {
+                VStack(alignment: .leading, spacing: HTTPDetailLayout.torrentFileSpacing) {
+                    ForEach(item.torrentFileDetails) { file in
+                        VStack(alignment: .leading, spacing: HTTPDetailLayout.torrentLineSpacing) {
+                            Color.clear
+                                .frame(height: HTTPDetailLayout.torrentFileNameHeight)
+
+                            Text(file.speedText)
+                                .monospacedDigit()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .font(.caption)
+                                .frame(height: HTTPDetailLayout.torrentProgressHeight)
                         }
                     }
                 }
@@ -193,7 +225,50 @@ private struct HTTPDownloadSpeedView: View {
 private enum HTTPDetailLayout {
     static let nameRowHeight: CGFloat = 17
     static let rowHeight: CGFloat = 16
+    static let torrentSummaryHeight: CGFloat = 32
     static let rowSpacing: CGFloat = 3
+    static let torrentFileNameHeight: CGFloat = 32
+    static let torrentProgressHeight: CGFloat = 16
+    static let torrentLineSpacing: CGFloat = 2
+    static let torrentFileSpacing: CGFloat = 5
+}
+
+private struct TorrentFileProgressView: View {
+    let files: [TorrentFileDetail]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: HTTPDetailLayout.torrentFileSpacing) {
+            ForEach(files) { file in
+                VStack(alignment: .leading, spacing: HTTPDetailLayout.torrentLineSpacing) {
+                    AdaptiveTooltipText(
+                        file.path,
+                        tooltipWidth: 1240,
+                        tooltipLineLimit: 2
+                    )
+                    .frame(height: HTTPDetailLayout.torrentFileNameHeight, alignment: .leading)
+
+                    HStack(spacing: 6) {
+                        ProgressView(value: file.progress)
+                            .frame(maxWidth: .infinity)
+
+                        Text("\(Int((file.progress * 100).rounded()))%")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+
+                        Text(file.fileSizeText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .frame(width: 132, alignment: .trailing)
+                    }
+                    .frame(height: HTTPDetailLayout.torrentProgressHeight)
+                }
+            }
+        }
+    }
 }
 
 /// 檔名下方的輕量進度摘要。
@@ -218,27 +293,38 @@ private struct ProgressSummaryView: View {
                 .lineLimit(1)
                 .help(item.fileSizeText)
         }
-        .frame(height: HTTPDetailLayout.rowHeight)
+        .frame(
+            height: item.kind == .torrent && !item.torrentFileDetails.isEmpty
+                ? HTTPDetailLayout.torrentSummaryHeight
+                : HTTPDetailLayout.rowHeight
+        )
     }
 }
 
-/// 一行會截斷的文字，但滑鼠移上去時會顯示完整內容。
-///
-/// SwiftUI 內建 `.help(...)` 由 macOS 系統控制，寬度不能細調。
-/// 這個自訂 popover 會按照內容自動調整寬度，並用 maxWidth 避免太長的 URL 撐出螢幕。
-private struct AdaptiveTooltipText: View {
+/// 一行截斷文字，滑鼠停留後以可調整大小的 popover 顯示完整內容。
+struct AdaptiveTooltipText: View {
     let text: String
     let font: Font
     let color: Color
+    let tooltipWidth: CGFloat?
+    let tooltipLineLimit: Int?
 
     @State private var isPointerInside = false
     @State private var isHovering = false
     @State private var hoverTask: Task<Void, Never>?
 
-    init(_ text: String, font: Font = .body, color: Color = .primary) {
+    init(
+        _ text: String,
+        font: Font = .body,
+        color: Color = .primary,
+        tooltipWidth: CGFloat? = nil,
+        tooltipLineLimit: Int? = nil
+    ) {
         self.text = text
         self.font = font
         self.color = color
+        self.tooltipWidth = tooltipWidth
+        self.tooltipLineLimit = tooltipLineLimit
     }
 
     var body: some View {
@@ -264,8 +350,13 @@ private struct AdaptiveTooltipText: View {
                 Text(text)
                     .font(font)
                     .foregroundStyle(.primary)
+                    .lineLimit(tooltipLineLimit)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 1024, alignment: .leading)
+                    .frame(
+                        minWidth: tooltipWidth,
+                        maxWidth: tooltipWidth ?? 1024,
+                        alignment: .leading
+                    )
                     .padding(10)
             }
             .onDisappear {
@@ -293,6 +384,19 @@ private extension HTTPConnectionDetail {
     var speedText: String {
         ByteCountFormatter.string(fromByteCount: bytesPerSecond, countStyle: .binary) + "/s"
     }
+}
+
+private extension TorrentFileDetail {
+    var fileSizeText: String {
+        let received = ByteCountFormatter.string(fromByteCount: bytesReceived, countStyle: .binary)
+        let expected = ByteCountFormatter.string(fromByteCount: bytesExpected, countStyle: .binary)
+        return received + " / " + expected
+    }
+
+    var speedText: String {
+        ByteCountFormatter.string(fromByteCount: bytesPerSecond, countStyle: .binary) + "/s"
+    }
+
 }
 
 private extension View {
@@ -351,6 +455,14 @@ private extension View {
                             && item.status != .queued
                             && !(item.kind == .torrent && item.status == .completed && item.isTorrentSeeding)
                     )
+
+                    if item.kind == .torrent {
+                        Button {
+                            downloadManager.reselectTorrentFiles(item)
+                        } label: {
+                            Label("Select Files…", systemImage: "checklist")
+                        }
+                    }
 
                     Divider()
                 }

@@ -10,10 +10,12 @@
 #include <vector>
 
 #include <libtorrent/add_torrent_params.hpp>
+#include <libtorrent/alert_types.hpp>
 #include <libtorrent/download_priority.hpp>
 #include <libtorrent/error_code.hpp>
 #include <libtorrent/file_storage.hpp>
 #include <libtorrent/magnet_uri.hpp>
+#include <libtorrent/peer_request.hpp>
 #include <libtorrent/session.hpp>
 #include <libtorrent/settings_pack.hpp>
 #include <libtorrent/torrent_info.hpp>
@@ -42,9 +44,12 @@ namespace lt = libtorrent;
     self = [super init];
     if (self) {
         lt::settings_pack settings;
-        // Keep alerts modest for now; status is polled by Swift instead of
-        // consuming every libtorrent alert type.
-        settings.set_int(lt::settings_pack::alert_mask, lt::alert_category::error | lt::alert_category::status);
+        // Keep alerts modest; Swift polls status, but file-priority updates
+        // need storage alerts because prioritize_files() is asynchronous.
+        settings.set_int(
+            lt::settings_pack::alert_mask,
+            lt::alert_category::error | lt::alert_category::status | lt::alert_category::storage
+        );
 
         // DHT/LSD/UPnP/NAT-PMP improve peer discovery, especially for magnets.
         settings.set_bool(lt::settings_pack::enable_dht, true);
@@ -220,6 +225,7 @@ namespace lt = libtorrent;
         }
         _handles.erase(found);
     }
+    _originalFilePaths.erase(identifier.UTF8String);
 }
 
 - (void)reannounce:(NSString *)identifier {
@@ -264,6 +270,60 @@ namespace lt = libtorrent;
             @"index": @(index),
             @"path": [NSString stringWithUTF8String:path.c_str()],
             @"size": @((long long)size)
+        }];
+    }
+
+    return files;
+}
+
+- (NSArray<NSDictionary<NSString *, id> *> *)fileProgressForIdentifier:(NSString *)identifier {
+    auto found = _handles.find(identifier.UTF8String);
+    if (found == _handles.end() || !found->second.is_valid() || !found->second.status().has_metadata) {
+        return @[];
+    }
+
+    std::shared_ptr<const lt::torrent_info> info = found->second.torrent_file();
+    if (!info) {
+        return @[];
+    }
+
+    std::vector<std::int64_t> progress = found->second.file_progress();
+    lt::file_storage const& storage = info->files();
+    auto originals = _originalFilePaths.find(identifier.UTF8String);
+    NSMutableArray<NSDictionary<NSString *, id> *> *files = [NSMutableArray array];
+
+    for (int index = 0; index < storage.num_files(); ++index) {
+        lt::file_index_t fileIndex(index);
+        std::string path = originals != _originalFilePaths.end() && index < originals->second.size()
+            ? originals->second[index]
+            : storage.file_path(fileIndex);
+        std::int64_t size = storage.file_size(fileIndex);
+        std::int64_t downloaded = index < progress.size() ? progress[index] : 0;
+        [files addObject:@{
+            @"index": @(index),
+            @"path": [NSString stringWithUTF8String:path.c_str()],
+            @"size": @((long long)size),
+            @"downloaded": @((long long)std::min(downloaded, size))
+        }];
+    }
+
+    return files;
+}
+
+- (NSArray<NSDictionary<NSString *, id> *> *)filePrioritiesForIdentifier:(NSString *)identifier {
+    auto found = _handles.find(identifier.UTF8String);
+    if (found == _handles.end() || !found->second.is_valid() || !found->second.status().has_metadata) {
+        return @[];
+    }
+
+    std::vector<lt::download_priority_t> priorities = found->second.get_file_priorities();
+    NSMutableArray<NSDictionary<NSString *, id> *> *files = [NSMutableArray array];
+
+    for (int index = 0; index < priorities.size(); ++index) {
+        int priority = static_cast<int>(static_cast<lt::download_priority_t::underlying_type>(priorities[index]));
+        [files addObject:@{
+            @"index": @(index),
+            @"priority": @(priority)
         }];
     }
 
@@ -338,7 +398,9 @@ namespace lt = libtorrent;
     found->second.prioritize_files(priorities);
 }
 
-- (void)setSelectedFileIndexes:(NSIndexSet *)indexes forIdentifier:(NSString *)identifier {
+- (void)setSelectedFileIndexes:(NSIndexSet *)indexes
+                 forIdentifier:(NSString *)identifier
+                  forceRecheck:(BOOL)forceRecheck {
     auto found = _handles.find(identifier.UTF8String);
     if (found == _handles.end() || !found->second.is_valid() || !found->second.status().has_metadata) {
         return;
@@ -358,6 +420,12 @@ namespace lt = libtorrent;
         priorities.push_back([indexes containsIndex:index] ? lt::default_priority : lt::dont_download);
     }
 
+    if (forceRecheck) {
+        // File priorities are ignored while libtorrent considers the torrent
+        // a seed. Queue the recheck first so the following priority update can
+        // make newly selected, missing files downloadable.
+        found->second.force_recheck();
+    }
     found->second.prioritize_files(priorities);
     // This is the moment real payload download is allowed to start.
     found->second.unset_flags(lt::torrent_flags::upload_mode);
@@ -366,6 +434,96 @@ namespace lt = libtorrent;
     found->second.force_reannounce(0, -1, lt::torrent_handle::ignore_min_interval);
     found->second.force_dht_announce();
     found->second.force_lsd_announce();
+}
+
+- (NSArray<NSString *> *)drainFilePriorityAlertIdentifiers {
+    NSMutableArray<NSString *> *identifiers = [NSMutableArray array];
+    if (!_session) {
+        return identifiers;
+    }
+
+    std::vector<lt::alert*> alerts;
+    _session->pop_alerts(&alerts);
+
+    for (lt::alert *alert : alerts) {
+        auto priorityAlert = lt::alert_cast<lt::file_prio_alert>(alert);
+        if (priorityAlert == nullptr || !priorityAlert->handle.is_valid()) {
+            continue;
+        }
+
+        for (auto const& entry : _handles) {
+            if (entry.second == priorityAlert->handle) {
+                [identifiers addObject:[NSString stringWithUTF8String:entry.first.c_str()]];
+                break;
+            }
+        }
+    }
+
+    return identifiers;
+}
+
+- (void)activateSelectedFilePieces:(NSIndexSet *)indexes forIdentifier:(NSString *)identifier {
+    auto found = _handles.find(identifier.UTF8String);
+    if (found == _handles.end() || !found->second.is_valid() || !found->second.status().has_metadata) {
+        return;
+    }
+
+    std::shared_ptr<const lt::torrent_info> info = found->second.torrent_file();
+    if (!info) {
+        return;
+    }
+
+    std::vector<std::int64_t> progress = found->second.file_progress();
+    lt::file_storage const& storage = info->files();
+    int const pieceLength = std::max(1, storage.piece_length());
+
+    for (int index = 0; index < storage.num_files(); ++index) {
+        if (![indexes containsIndex:index]) {
+            continue;
+        }
+
+        lt::file_index_t fileIndex(index);
+        std::int64_t const size = storage.file_size(fileIndex);
+        if (size <= 0) {
+            continue;
+        }
+
+        std::int64_t const downloaded = index < progress.size()
+            ? std::min(progress[index], size)
+            : 0;
+        if (downloaded >= size) {
+            continue;
+        }
+
+        // Touch several upcoming pieces for each selected file. This does not
+        // guarantee equal BT throughput, but it stops newly selected files from
+        // sitting behind the old file's request queue indefinitely.
+        std::int64_t offset = std::min(downloaded, size - 1);
+        for (int pieceOffset = 0; pieceOffset < 4 && offset < size; ++pieceOffset) {
+            lt::peer_request request = info->map_file(fileIndex, offset, 1);
+            if (!found->second.have_piece(request.piece)) {
+                found->second.piece_priority(request.piece, lt::top_priority);
+                found->second.set_piece_deadline(request.piece, pieceOffset * 150);
+            }
+            offset += pieceLength;
+        }
+    }
+
+    found->second.unset_flags(lt::torrent_flags::upload_mode);
+    found->second.resume();
+    found->second.force_reannounce(0, -1, lt::torrent_handle::ignore_min_interval);
+    found->second.force_dht_announce();
+    found->second.force_lsd_announce();
+}
+
+- (void)forceRecheck:(NSString *)identifier {
+    auto found = _handles.find(identifier.UTF8String);
+    if (found == _handles.end() || !found->second.is_valid()) {
+        return;
+    }
+
+    found->second.force_recheck();
+    found->second.resume();
 }
 
 - (NSDictionary<NSString *, id> *)statusForIdentifier:(NSString *)identifier {

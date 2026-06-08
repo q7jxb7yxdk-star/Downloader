@@ -4,9 +4,16 @@ import Foundation
 @MainActor
 protocol TorrentDownloadEngineDelegate: AnyObject {
     func update(id: DownloadItem.ID, progress: Double, received: Int64, expected: Int64, speed: Int64, uploadSpeed: Int64)
+    func updateTorrentFiles(id: DownloadItem.ID, files: [TorrentFileDetail])
     func updateTorrentSeeding(id: DownloadItem.ID, uploadSpeed: Int64, statusMessage: String)
     func updateStatusText(id: DownloadItem.ID, message: String?)
-    func torrentFilesReady(id: DownloadItem.ID, title: String, files: [TorrentFileEntry])
+    func torrentFilesReady(
+        id: DownloadItem.ID,
+        title: String,
+        files: [TorrentFileEntry],
+        selectedIndexes: Set<Int>,
+        isReselection: Bool
+    )
     func complete(id: DownloadItem.ID, fileURL: URL, received: Int64?, expected: Int64?, averageBytesPerSecond: Int64?, averageUploadBytesPerSecond: Int64?, activeDownloadDuration: TimeInterval?)
     func fail(id: DownloadItem.ID, errorMessage: String?)
 }
@@ -39,6 +46,7 @@ final class TorrentDownloadEngine {
 
     /// 防止 metadata 找到後重複彈檔案選擇 sheet。
     private var selectionRequestedItemIDs: Set<DownloadItem.ID> = []
+    private var fileReselectionRequestedItemIDs: Set<DownloadItem.ID> = []
 
     /// 等待使用者選檔案時，不應該把 torrent 判斷為完成或繼續更新速度。
     private var waitingForFileSelectionItemIDs: Set<DownloadItem.ID> = []
@@ -46,6 +54,9 @@ final class TorrentDownloadEngine {
     /// 已完成下載並保留在 session 內提供上載的項目。
     private var completedItemIDs: Set<DownloadItem.ID> = []
     private var completedPollCountsByTorrentID: [String: Int] = [:]
+    private var pendingFileSelectionsByItemID: [DownloadItem.ID: Set<Int>] = [:]
+    private var pendingActiveFileSelectionsByItemID: [DownloadItem.ID: Date] = [:]
+    private var pendingActiveFileSelectionRetriesByItemID: [DownloadItem.ID: Int] = [:]
 
     /// App 重開後 resume 時，從持久化資料帶回之前選過的檔案 index。
     private var selectedFileIndexesByItemID: [DownloadItem.ID: Set<Int>] = [:]
@@ -54,6 +65,9 @@ final class TorrentDownloadEngine {
     private var metadataPollCountsByTorrentID: [String: Int] = [:]
     /// BT 平均速度只計算實際 payload 下載時間，不包括 metadata、等待選檔和暫停。
     private var payloadTimingsByTorrentID: [String: PayloadTiming] = [:]
+    private var fileProgressLastRefreshByTorrentID: [String: Date] = [:]
+    private var fileProgressSamplesByItemID: [DownloadItem.ID: [Int: (date: Date, bytes: Int64)]] = [:]
+    private var fileDisplayedSpeedsByItemID: [DownloadItem.ID: [Int: Int64]] = [:]
     private var timer: Timer?
 
     init(delegate: TorrentDownloadEngineDelegate) {
@@ -103,6 +117,7 @@ final class TorrentDownloadEngine {
         pausedItemIDs.insert(id)
         suspendPayloadTiming(for: torrentID)
         bridge.pause(torrentID)
+        publishTorrentFileDetails(itemID: id, torrentID: torrentID, resetSpeeds: true, force: true)
     }
 
     /// 取消 torrent 並釋放所有 Swift 層狀態。
@@ -113,12 +128,17 @@ final class TorrentDownloadEngine {
         saveFoldersByTorrentID[torrentID] = nil
         pausedItemIDs.remove(id)
         selectionRequestedItemIDs.remove(id)
+        fileReselectionRequestedItemIDs.remove(id)
         waitingForFileSelectionItemIDs.remove(id)
         completedItemIDs.remove(id)
         completedPollCountsByTorrentID[torrentID] = nil
+        pendingFileSelectionsByItemID[id] = nil
         selectedFileIndexesByItemID[id] = nil
         metadataPollCountsByTorrentID[torrentID] = nil
         payloadTimingsByTorrentID[torrentID] = nil
+        fileProgressLastRefreshByTorrentID[torrentID] = nil
+        fileProgressSamplesByItemID[id] = nil
+        fileDisplayedSpeedsByItemID[id] = nil
         securityScopedFoldersByTorrentID.removeValue(forKey: torrentID)?.stopAccessingSecurityScopedResource()
     }
 
@@ -154,30 +174,83 @@ final class TorrentDownloadEngine {
                 selectedFileIndexesByItemID[item.id] = selectedIndexes
                 selectionRequestedItemIDs.insert(item.id)
                 waitingForFileSelectionItemIDs.remove(item.id)
-                bridge.setSelectedFileIndexes(indexSet as IndexSet, forIdentifier: torrentID)
+                bridge.setSelectedFileIndexes(
+                    indexSet as IndexSet,
+                    forIdentifier: torrentID,
+                    forceRecheck: false
+                )
             }
         } else if waitingForFileSelectionItemIDs.contains(item.id) {
             bridge.resumeDiscoveryOnly(torrentID)
         } else {
             bridge.resume(torrentID)
         }
+        fileProgressSamplesByItemID[item.id] = nil
+        fileDisplayedSpeedsByItemID[item.id] = nil
+        publishTorrentFileDetails(itemID: item.id, torrentID: torrentID, force: true)
         startTimerIfNeeded()
         return true
     }
 
     /// 使用者選好 BT 檔案後，把 selected indexes 交給 libtorrent 設定 priority。
-    func selectFiles(for itemID: DownloadItem.ID, indexes: Set<Int>) {
+    func selectFiles(for itemID: DownloadItem.ID, indexes: Set<Int>, isReselection: Bool) {
         guard let torrentID = torrentID(for: itemID) else { return }
+        fileReselectionRequestedItemIDs.remove(itemID)
+        let wasCompleted = completedItemIDs.remove(itemID) != nil
+        if wasCompleted {
+            completedPollCountsByTorrentID[torrentID] = nil
+        }
         let indexSet = NSMutableIndexSet()
         for index in indexes {
             indexSet.add(index)
         }
-        bridge.setSelectedFileIndexes(indexSet as IndexSet, forIdentifier: torrentID)
         selectedFileIndexesByItemID[itemID] = indexes
         selectionRequestedItemIDs.insert(itemID)
         pausedItemIDs.remove(itemID)
         waitingForFileSelectionItemIDs.remove(itemID)
+        if wasCompleted {
+            // libtorrent ignores file-priority changes while it still regards
+            // the torrent as a seed. Apply the selection after Checking starts.
+            pendingFileSelectionsByItemID[itemID] = indexes
+            bridge.forceRecheck(torrentID)
+        } else {
+            bridge.setSelectedFileIndexes(
+                indexSet as IndexSet,
+                forIdentifier: torrentID,
+                forceRecheck: !isReselection
+            )
+            if isReselection {
+                pendingActiveFileSelectionsByItemID[itemID] = Date()
+                pendingActiveFileSelectionRetriesByItemID[itemID] = 0
+            }
+        }
+        fileProgressSamplesByItemID[itemID] = nil
+        fileDisplayedSpeedsByItemID[itemID] = nil
+        publishTorrentFileDetails(itemID: itemID, torrentID: torrentID, force: true)
         startTimerIfNeeded()
+    }
+
+    /// 讀取現有 metadata，讓使用者重新選擇要下載的檔案。
+    func requestFileReselection(for item: DownloadItem) {
+        fileReselectionRequestedItemIDs.insert(item.id)
+        guard let torrentID = torrentID(for: item.id) else {
+            if !start(item: item) {
+                fileReselectionRequestedItemIDs.remove(item.id)
+            }
+            return
+        }
+
+        let files = torrentFileEntries(for: torrentID)
+        guard !files.isEmpty else { return }
+
+        fileReselectionRequestedItemIDs.remove(item.id)
+        delegate?.torrentFilesReady(
+            id: item.id,
+            title: item.name,
+            files: files,
+            selectedIndexes: item.selectedTorrentFileIndexes,
+            isReselection: true
+        )
     }
 
     /// 啟動輪詢 timer。
@@ -200,6 +273,9 @@ final class TorrentDownloadEngine {
             return
         }
 
+        let priorityAppliedTorrentIDs = Set(bridge.drainFilePriorityAlertIdentifiers())
+        let now = Date()
+
         for (torrentID, itemID) in itemIDsByTorrentID {
             guard !pausedItemIDs.contains(itemID) else { continue }
 
@@ -220,6 +296,46 @@ final class TorrentDownloadEngine {
             let state = status["state"] as? String ?? "Downloading"
             let isPaused = (status["isPaused"] as? NSNumber)?.boolValue ?? false
 
+            if let requestedAt = pendingActiveFileSelectionsByItemID[itemID] {
+                if prioritiesApplied(for: itemID, torrentID: torrentID) {
+                    pendingActiveFileSelectionsByItemID[itemID] = nil
+                    pendingActiveFileSelectionRetriesByItemID[itemID] = nil
+                    activateSelectedFilePieces(for: itemID, torrentID: torrentID)
+                    bridge.reannounce(torrentID)
+                } else if priorityAppliedTorrentIDs.contains(torrentID)
+                            || now.timeIntervalSince(requestedAt) > 1 {
+                    let retryCount = pendingActiveFileSelectionRetriesByItemID[itemID] ?? 0
+                    pendingActiveFileSelectionRetriesByItemID[itemID] = retryCount + 1
+                    pendingActiveFileSelectionsByItemID[itemID] = now
+                    applySelectedFileIndexes(for: itemID, torrentID: torrentID, forceRecheck: false)
+                    bridge.reannounce(torrentID)
+                } else {
+                    delegate?.updateStatusText(id: itemID, message: "Updating selection")
+                    publishTorrentFileDetails(itemID: itemID, torrentID: torrentID)
+                    continue
+                }
+            }
+
+            if let pendingIndexes = pendingFileSelectionsByItemID[itemID] {
+                if state == "Checking" {
+                    let indexSet = NSMutableIndexSet()
+                    for index in pendingIndexes {
+                        indexSet.add(index)
+                    }
+                    bridge.setSelectedFileIndexes(
+                        indexSet as IndexSet,
+                        forIdentifier: torrentID,
+                        forceRecheck: false
+                    )
+                    pendingFileSelectionsByItemID[itemID] = nil
+                    bridge.reannounce(torrentID)
+                } else {
+                    delegate?.updateStatusText(id: itemID, message: "Preparing selected files")
+                }
+                publishTorrentFileDetails(itemID: itemID, torrentID: torrentID)
+                continue
+            }
+
             if !hasMetadata {
                 let pollCount = (metadataPollCountsByTorrentID[torrentID] ?? 0) + 1
                 metadataPollCountsByTorrentID[torrentID] = pollCount
@@ -231,16 +347,23 @@ final class TorrentDownloadEngine {
                 metadataPollCountsByTorrentID[torrentID] = nil
             }
 
-            if hasMetadata && !selectionRequestedItemIDs.contains(itemID) {
-                let files = bridge.files(forIdentifier: torrentID).compactMap { dictionary -> TorrentFileEntry? in
-                    guard let index = (dictionary["index"] as? NSNumber)?.intValue,
-                          let path = dictionary["path"] as? String,
-                          let size = (dictionary["size"] as? NSNumber)?.int64Value
-                    else {
-                        return nil
-                    }
-                    return TorrentFileEntry(index: index, path: path, size: size)
+            if hasMetadata,
+               fileReselectionRequestedItemIDs.contains(itemID) {
+                let files = torrentFileEntries(for: torrentID)
+                if !files.isEmpty {
+                    fileReselectionRequestedItemIDs.remove(itemID)
+                    delegate?.torrentFilesReady(
+                        id: itemID,
+                        title: status["name"] as? String ?? "Torrent",
+                        files: files,
+                        selectedIndexes: selectedFileIndexesByItemID[itemID] ?? [],
+                        isReselection: true
+                    )
                 }
+            }
+
+            if hasMetadata && !selectionRequestedItemIDs.contains(itemID) {
+                let files = torrentFileEntries(for: torrentID)
 
                 if !files.isEmpty {
                     let savedIndexes = selectedFileIndexesByItemID[itemID]
@@ -253,7 +376,11 @@ final class TorrentDownloadEngine {
                         }
                         selectionRequestedItemIDs.insert(itemID)
                         waitingForFileSelectionItemIDs.remove(itemID)
-                        bridge.setSelectedFileIndexes(indexSet as IndexSet, forIdentifier: torrentID)
+                        bridge.setSelectedFileIndexes(
+                            indexSet as IndexSet,
+                            forIdentifier: torrentID,
+                            forceRecheck: true
+                        )
                         bridge.reannounce(torrentID)
                         continue
                     }
@@ -262,7 +389,11 @@ final class TorrentDownloadEngine {
                         // 舊資料可能沒有保存 file indexes；完成項目重新 seeding 時使用全部檔案。
                         let allIndexes = IndexSet(files.map(\.index))
                         selectionRequestedItemIDs.insert(itemID)
-                        bridge.setSelectedFileIndexes(allIndexes, forIdentifier: torrentID)
+                        bridge.setSelectedFileIndexes(
+                            allIndexes,
+                            forIdentifier: torrentID,
+                            forceRecheck: false
+                        )
                         bridge.reannounce(torrentID)
                         continue
                     }
@@ -274,7 +405,13 @@ final class TorrentDownloadEngine {
                     // 等使用者選檔案前，把所有檔案 priority 設成 dont_download。
                     bridge.pauseAllFiles(torrentID)
                     bridge.reannounce(torrentID)
-                    delegate?.torrentFilesReady(id: itemID, title: status["name"] as? String ?? "Torrent", files: files)
+                    delegate?.torrentFilesReady(
+                        id: itemID,
+                        title: status["name"] as? String ?? "Torrent",
+                        files: files,
+                        selectedIndexes: [],
+                        isReselection: false
+                    )
                     delegate?.updateStatusText(id: itemID, message: "Waiting for file selection")
                     continue
                 }
@@ -317,9 +454,18 @@ final class TorrentDownloadEngine {
                 && selectionRequestedItemIDs.contains(itemID)
             {
                 beginPayloadTiming(for: torrentID, received: received, uploaded: uploaded)
+                publishTorrentFileDetails(itemID: itemID, torrentID: torrentID)
             }
 
-            if isFinished {
+            let selectedFilesComplete = selectedTorrentFilesAreComplete(
+                itemID: itemID,
+                torrentID: torrentID
+            )
+            if pendingActiveFileSelectionsByItemID[itemID] == nil,
+               isFinished,
+               expected > 0,
+               received >= expected,
+               selectedFilesComplete {
                 let saveFolder = saveFoldersByTorrentID[torrentID] ?? FolderBookmarkStore.fallbackFolder
                 let averageSpeeds = averagePayloadSpeeds(for: torrentID, received: received, uploaded: uploaded)
                 // 完成後把 `.tmp` 檔名還原成原本檔名。
@@ -335,6 +481,10 @@ final class TorrentDownloadEngine {
                     averageUploadBytesPerSecond: averageSpeeds.upload,
                     activeDownloadDuration: averageSpeeds.duration
                 )
+                delegate?.updateTorrentFiles(id: itemID, files: [])
+                fileProgressLastRefreshByTorrentID[torrentID] = nil
+                fileProgressSamplesByItemID[itemID] = nil
+                fileDisplayedSpeedsByItemID[itemID] = nil
                 completedItemIDs.insert(itemID)
                 completedPollCountsByTorrentID[torrentID] = 0
                 delegate?.updateTorrentSeeding(
@@ -368,6 +518,161 @@ final class TorrentDownloadEngine {
     /// 從 App item id 找回 libtorrent identifier。
     private func torrentID(for itemID: DownloadItem.ID) -> String? {
         itemIDsByTorrentID.first { $0.value == itemID }?.key
+    }
+
+    private func applySelectedFileIndexes(
+        for itemID: DownloadItem.ID,
+        torrentID: String,
+        forceRecheck: Bool
+    ) {
+        let indexes = selectedFileIndexesByItemID[itemID] ?? []
+        let indexSet = NSMutableIndexSet()
+        for index in indexes {
+            indexSet.add(index)
+        }
+        bridge.setSelectedFileIndexes(
+            indexSet as IndexSet,
+            forIdentifier: torrentID,
+            forceRecheck: forceRecheck
+        )
+    }
+
+    private func activateSelectedFilePieces(
+        for itemID: DownloadItem.ID,
+        torrentID: String
+    ) {
+        let indexes = selectedFileIndexesByItemID[itemID] ?? []
+        let indexSet = NSMutableIndexSet()
+        for index in indexes {
+            indexSet.add(index)
+        }
+        bridge.activateSelectedFilePieces(indexSet as IndexSet, forIdentifier: torrentID)
+    }
+
+    private func prioritiesApplied(
+        for itemID: DownloadItem.ID,
+        torrentID: String
+    ) -> Bool {
+        let selectedIndexes = selectedFileIndexesByItemID[itemID] ?? []
+        guard !selectedIndexes.isEmpty else { return false }
+
+        var prioritiesByIndex: [Int: Int] = [:]
+        for dictionary in bridge.filePriorities(forIdentifier: torrentID) {
+            guard let index = (dictionary["index"] as? NSNumber)?.intValue,
+                  let priority = (dictionary["priority"] as? NSNumber)?.intValue
+            else {
+                continue
+            }
+            prioritiesByIndex[index] = priority
+        }
+
+        guard !prioritiesByIndex.isEmpty else { return false }
+        return selectedIndexes.allSatisfy { (prioritiesByIndex[$0] ?? 0) > 0 }
+    }
+
+    /// libtorrent 在相同 info-hash 被快速移除再加入時，可能短暫保留舊的
+    /// `is_finished` 狀態。完成前以磁碟 recheck 後的逐檔案 bytes 再確認一次。
+    private func selectedTorrentFilesAreComplete(
+        itemID: DownloadItem.ID,
+        torrentID: String
+    ) -> Bool {
+        let selectedIndexes = selectedFileIndexesByItemID[itemID] ?? []
+        guard !selectedIndexes.isEmpty else { return false }
+
+        var foundIndexes: Set<Int> = []
+        var selectedTotal: Int64 = 0
+        var selectedDownloaded: Int64 = 0
+
+        for dictionary in bridge.fileProgress(forIdentifier: torrentID) {
+            guard let index = (dictionary["index"] as? NSNumber)?.intValue,
+                  selectedIndexes.contains(index),
+                  let size = (dictionary["size"] as? NSNumber)?.int64Value,
+                  let downloaded = (dictionary["downloaded"] as? NSNumber)?.int64Value
+            else {
+                continue
+            }
+
+            foundIndexes.insert(index)
+            selectedTotal += size
+            selectedDownloaded += min(downloaded, size)
+            guard downloaded >= size else { return false }
+        }
+
+        return foundIndexes == selectedIndexes
+            && selectedTotal > 0
+            && selectedDownloaded >= selectedTotal
+    }
+
+    /// 讀取 libtorrent 的逐檔案下載 bytes，並計算各檔案的平滑速度。
+    private func publishTorrentFileDetails(
+        itemID: DownloadItem.ID,
+        torrentID: String,
+        resetSpeeds: Bool = false,
+        force: Bool = false
+    ) {
+        let now = Date()
+        if !force,
+           let lastRefresh = fileProgressLastRefreshByTorrentID[torrentID],
+           now.timeIntervalSince(lastRefresh) < 0.5 {
+            return
+        }
+        fileProgressLastRefreshByTorrentID[torrentID] = now
+
+        let selectedIndexes = selectedFileIndexesByItemID[itemID] ?? []
+        guard !selectedIndexes.isEmpty else {
+            delegate?.updateTorrentFiles(id: itemID, files: [])
+            return
+        }
+
+        let details = bridge.fileProgress(forIdentifier: torrentID).compactMap { dictionary -> TorrentFileDetail? in
+            guard let index = (dictionary["index"] as? NSNumber)?.intValue,
+                  selectedIndexes.contains(index),
+                  let path = dictionary["path"] as? String,
+                  let size = (dictionary["size"] as? NSNumber)?.int64Value,
+                  let downloaded = (dictionary["downloaded"] as? NSNumber)?.int64Value
+            else {
+                return nil
+            }
+
+            let speed: Int64
+            if resetSpeeds {
+                speed = 0
+            } else if let previous = fileProgressSamplesByItemID[itemID]?[index] {
+                let elapsed = now.timeIntervalSince(previous.date)
+                let instantSpeed = elapsed > 0
+                    ? max(0, Int64(Double(downloaded - previous.bytes) / elapsed))
+                    : 0
+                let previousSpeed = fileDisplayedSpeedsByItemID[itemID]?[index] ?? instantSpeed
+                speed = Int64(Double(previousSpeed) * 0.7 + Double(instantSpeed) * 0.3)
+            } else {
+                speed = 0
+            }
+
+            fileProgressSamplesByItemID[itemID, default: [:]][index] = (now, downloaded)
+            fileDisplayedSpeedsByItemID[itemID, default: [:]][index] = speed
+            return TorrentFileDetail(
+                id: index,
+                path: path,
+                bytesReceived: downloaded,
+                bytesExpected: size,
+                bytesPerSecond: speed
+            )
+        }
+        .sorted { $0.id < $1.id }
+
+        delegate?.updateTorrentFiles(id: itemID, files: details)
+    }
+
+    private func torrentFileEntries(for torrentID: String) -> [TorrentFileEntry] {
+        bridge.files(forIdentifier: torrentID).compactMap { dictionary -> TorrentFileEntry? in
+            guard let index = (dictionary["index"] as? NSNumber)?.intValue,
+                  let path = dictionary["path"] as? String,
+                  let size = (dictionary["size"] as? NSNumber)?.int64Value
+            else {
+                return nil
+            }
+            return TorrentFileEntry(index: index, path: path, size: size)
+        }
     }
 
     /// 記錄開始傳輸 payload 的時間點。metadata 尋找和等待使用者選檔不計入平均速度。
@@ -412,6 +717,7 @@ final class TorrentDownloadEngine {
         let averageUpload = uploadedBytes > 0 ? Int64(Double(uploadedBytes) / elapsed) : 0
         return (averageDownload, averageUpload, elapsed)
     }
+
 
     /// 組合列表狀態欄文字。
     private func torrentStatusMessage(state: String, hasMetadata: Bool, seeds: Int, peers: Int, candidates: Int) -> String {

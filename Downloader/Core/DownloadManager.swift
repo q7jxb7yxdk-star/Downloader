@@ -357,21 +357,34 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 使用者在 BT 檔案選擇 sheet 按下開始後呼叫。
     func chooseTorrentFiles(itemID: DownloadItem.ID, indexes: Set<Int>) {
         guard let index = items.firstIndex(where: { $0.id == itemID }), items[index].kind == .torrent else { return }
+        let previousIndexes = items[index].selectedTorrentFileIndexes
+        let isReselection = torrentFileSelection?.isReselection == true
         let selectedPaths = torrentFileSelection?.itemID == itemID
             ? torrentFileSelection?.files.filter { indexes.contains($0.index) }.map(\.path) ?? []
             : []
+        torrentFileSelection = nil
+        guard indexes != previousIndexes else { return }
         items[index].selectedTorrentFileIndexes = indexes
         items[index].selectedTorrentFilePaths = selectedPaths
-        torrentFileSelection = nil
-        torrentEngine.selectFiles(for: itemID, indexes: indexes)
+        torrentEngine.selectFiles(for: itemID, indexes: indexes, isReselection: isReselection)
         mark(id: itemID, status: .queued)
+    }
+
+    /// 顯示現有 BT metadata，讓使用者重新選擇下載檔案。
+    func reselectTorrentFiles(_ item: DownloadItem) {
+        guard item.kind == .torrent, !item.isTrashed else { return }
+        torrentEngine.requestFileReselection(for: item)
     }
 
     /// 使用者取消 BT 檔案選擇時，只有全新任務會被移除。
     ///
     /// 如果任務之前已經下載過，重開 App 後意外再出現選檔 sheet 時，
     /// Cancel 只會停止這次 engine，保留列表項目和既有進度。
-    func cancelTorrentFileSelection(itemID: DownloadItem.ID) {
+    func cancelTorrentFileSelection(itemID: DownloadItem.ID, isReselection: Bool = false) {
+        if isReselection {
+            torrentFileSelection = nil
+            return
+        }
         guard let index = items.firstIndex(where: { $0.id == itemID }) else { return }
         torrentEngine.cancel(id: itemID)
         if items[index].progress > 0 || items[index].bytesReceived > 0 || !items[index].selectedTorrentFileIndexes.isEmpty {
@@ -409,6 +422,13 @@ final class DownloadManager: NSObject, ObservableObject {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         guard !items[index].isTrashed, items[index].kind == .http else { return }
         items[index].httpConnectionDetails = connections
+    }
+
+    /// BT engine 回報已選檔案的即時進度與速度。
+    func updateTorrentFiles(id: DownloadItem.ID, files: [TorrentFileDetail]) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        guard !items[index].isTrashed, items[index].kind == .torrent else { return }
+        items[index].torrentFileDetails = files
     }
 
     /// Engine 回報補充狀態文字，例如「Checking range support」或 peer 數量。
@@ -458,6 +478,7 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].bytesPerSecond = 0
         items[index].uploadBytesPerSecond = 0
         items[index].httpConnectionDetails = []
+        items[index].torrentFileDetails = []
         if !wasAlreadyCompleted {
             items[index].averageBytesPerSecond = averageBytesPerSecond ?? (completedBytes > 0 ? Int64(Double(completedBytes) / elapsed) : 0)
             items[index].averageUploadBytesPerSecond = averageUploadBytesPerSecond ?? 0
@@ -510,19 +531,35 @@ final class DownloadManager: NSObject, ObservableObject {
     func fail(id: DownloadItem.ID, errorMessage: String?) {
         if let index = items.firstIndex(where: { $0.id == id }) {
             items[index].httpConnectionDetails = []
+            items[index].torrentFileDetails = []
         }
         mark(id: id, status: .failed, errorMessage: errorMessage)
     }
 
     /// BT engine 找到 metadata 後，要求 UI 顯示可選檔案列表。
-    func torrentFilesReady(id: DownloadItem.ID, title: String, files: [TorrentFileEntry]) {
+    func torrentFilesReady(
+        id: DownloadItem.ID,
+        title: String,
+        files: [TorrentFileEntry],
+        selectedIndexes: Set<Int>,
+        isReselection: Bool
+    ) {
         let displayTitle = title.isEmpty ? "Torrent" : title
-        if let index = items.firstIndex(where: { $0.id == id }),
+        if !isReselection,
+           let index = items.firstIndex(where: { $0.id == id }),
            items[index].name.isEmpty || items[index].name == "Magnet Download" {
             items[index].name = displayTitle
         }
-        torrentFileSelection = TorrentFileSelection(itemID: id, title: displayTitle, files: files)
-        mark(id: id, status: .paused, errorMessage: "Waiting for file selection")
+        torrentFileSelection = TorrentFileSelection(
+            itemID: id,
+            title: displayTitle,
+            files: files,
+            selectedIndexes: selectedIndexes,
+            isReselection: isReselection
+        )
+        if !isReselection {
+            mark(id: id, status: .paused, errorMessage: "Waiting for file selection")
+        }
     }
 
     /// 修改任務狀態的小工具方法。
