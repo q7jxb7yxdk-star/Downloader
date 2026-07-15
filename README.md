@@ -20,7 +20,7 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - While downloading, ETA shows the estimated remaining time. After completion, it shows the accumulated active download time, excluding paused time.
 - Right-click actions: Resume, Pause, Show in Finder, Delete, Delete with Files.
 - Download completion notification and system sound.
-- Native Safari App Extension with automatic direct-download capture and a `Download with Downloader` link context menu.
+- Safari Web Extension with automatic direct-download capture and a `Download with Downloader` link context menu.
 
 ## Requirements
 
@@ -198,9 +198,9 @@ Completed files are renamed back to their final names.
 
 ## Safari Extension
 
-The project includes a native Safari App Extension target. It automatically
-captures explicit download links and also adds `Download with Downloader` to
-Safari's link context menu.
+The project includes a Safari Web Extension target. It automatically captures
+explicit download links and also adds `Download with Downloader` to Safari's
+link context menu.
 
 To use it:
 
@@ -222,12 +222,14 @@ created entirely by JavaScript, authenticated POST requests, or `blob:` URLs
 may still require Safari's own download flow.
 
 Direct file URLs opened in Safari by another app, such as Telegram, are also
-captured when they end in a known downloadable extension. Downloader opens in
-the foreground and Safari closes the temporary download tab. Duplicate
+captured when they end in a known downloadable extension. Redirected signed
+asset URLs, such as GitHub release downloads whose filename is stored in
+`response-content-disposition` or `rscd`, are also recognized. Downloader opens
+in the foreground and Safari closes the temporary download tab. Duplicate
 navigation events for the same URL are ignored for a short period.
 
-The Safari extension sends download URLs through an App Group queue. The
-extension launches its containing Downloader app directly. The
+The Safari extension sends download URLs through native messaging and an App
+Group queue. The extension launches its containing Downloader app directly. The
 `downloader://authorize` URL is retained only as a fallback and does not carry
 the download URL.
 

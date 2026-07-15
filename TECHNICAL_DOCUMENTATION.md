@@ -807,11 +807,13 @@ The checkbox uses `Binding<Bool>` because each toggle needs true/false, while th
 
 ## Safari Extension and URL Handoff
 
-Downloader uses a native Safari App Extension for automatic direct-download
-capture and right-click downloads.
+Downloader uses a Safari Web Extension for automatic direct-download capture
+and right-click downloads.
 
 ```text
 Downloader Safari Extension/Info.plist
+Downloader Safari Extension/Resources/manifest.json
+Downloader Safari Extension/Resources/background.js
 Downloader Safari Extension/Resources/content.js
 Downloader Safari Extension/SafariWebExtensionHandler.swift
 Downloader/UI/ContentView.swift
@@ -822,9 +824,11 @@ Downloader/UI/ContentView.swift
 `SettingsView` stores `automaticallyCaptureSafariDownloads` in the shared App
 Group `UserDefaults`. It defaults to enabled.
 
-When a page loads, `content.js` uses
-`safari.extension.dispatchMessage(...)` to ask the native extension handler for
-the setting. If enabled, the capture-phase click listener recognizes:
+When a page loads, `content.js` uses `browser.runtime.sendMessage(...)` to ask
+the extension background script for the setting. The background script forwards
+that request to `SafariWebExtensionHandler` through
+`browser.runtime.sendNativeMessage(...)`. If enabled, the capture-phase click
+listener recognizes:
 
 - Links with a `download` attribute.
 - `magnet:` links.
@@ -834,25 +838,30 @@ the setting. If enabled, the capture-phase click listener recognizes:
   `.torrent` filename, torrent labels, or torrent-related data attributes.
 
 Eligible clicks are cancelled before Safari starts its own navigation, then sent
-to `SafariWebExtensionHandler` with the `auto-capture-download` message through
-the same injected-script messaging API. The message includes an explicit
-`torrent` kind when the page identifies a torrent whose endpoint URL has no
-`.torrent` suffix.
+to `background.js` with the `auto-capture-download` message. The background
+script forwards the URL to `SafariWebExtensionHandler` with native messaging.
+The message includes an explicit `torrent` kind when the page identifies a
+torrent whose endpoint URL has no `.torrent` suffix. Download display names use
+the separate `displayName` field; the Web Extension message `name` remains the
+message type and is never stored as the file name.
 
 External apps such as Telegram can ask Safari to navigate directly to a file
-URL. This does not create a page click event, so the native extension also
-implements:
+URL. This does not create a page click event, so `background.js` also listens to
+top-frame `browser.webNavigation.onBeforeNavigate` events. For HTTP/HTTPS URLs
+ending in a known downloadable extension, the background script queues the URL,
+opens Downloader, and removes the temporary Safari tab. This prevents Safari
+from keeping an empty temporary download page or downloading the same file in
+parallel. A three-second in-memory URL window suppresses duplicate navigation
+callbacks. Direct `.torrent` URLs are queued with the explicit torrent kind;
+other known extensions use normal HTTP download routing.
 
-```swift
-page(_:willNavigateTo:)
-```
-
-For HTTP/HTTPS URLs ending in a known downloadable extension, this callback
-queues the URL, opens Downloader, and closes the containing Safari tab. This
-prevents Safari from keeping an empty temporary download page or downloading
-the same file in parallel. A three-second in-memory URL window suppresses
-duplicate navigation callbacks. Direct `.torrent` URLs are queued with the
-explicit torrent kind; other known extensions use normal HTTP download routing.
+Some hosts redirect direct file links to signed asset URLs whose path no longer
+contains the original extension. GitHub release assets are a common example:
+the final URL may expose the real filename only through query values such as
+`response-content-disposition` or `rscd`. The Safari extension checks those
+query values for `filename=...` before deciding whether the navigation is a
+direct download, so redirected `.dmg`, `.iso`, `.zip`, and similar assets can
+still be captured automatically.
 
 Ambiguous HTTP/HTTPS endpoints whose path contains `/file/` or `/download` use
 the `probe-download` message. The native extension sends a GET request with:
@@ -868,10 +877,10 @@ injected script to continue the original Safari navigation. The probe has a
 10-second timeout.
 
 The extension parses both `filename=` and UTF-8 `filename*=` values from
-`Content-Disposition`. The sanitized final path component is stored in the App
-Group queue and passed through `ContentView` to `DownloadManager`, so the Name
-column shows the server-provided Torrent filename instead of an opaque download
-endpoint identifier.
+`Content-Disposition`-style strings. The sanitized final path component is
+stored in the App Group queue and passed through `ContentView` to
+`DownloadManager`, so the Name column shows the server-provided filename instead
+of an opaque download endpoint identifier.
 
 Before `ContentView` imports downloads from Safari, a custom URL scheme, or a
 local `.torrent` file, it switches the sidebar to All and yields one MainActor
@@ -885,7 +894,7 @@ UTF-8 bytes inside `filename=`, the extension performs a reversible
 ISO-8859-1-to-UTF-8 repair before sanitizing the final path component. Normal
 filenames are left unchanged.
 
-Because the probe runs inside the sandboxed Safari App Extension, the extension
+Because the probe runs inside the sandboxed Safari Web Extension, the extension
 entitlements include `com.apple.security.network.client`. Probe failures and
 response status/header details are logged through `os_log` for diagnosis.
 
@@ -913,34 +922,33 @@ authentication.
 
 `Info.plist` declares:
 
-- `NSExtensionPointIdentifier`: `com.apple.Safari.extension`
-- `SFSafariContextMenu`: command `download-link`
-- `SFSafariContentScript`: `content.js`
-- `SFSafariWebsiteAccess`: all websites
+- `NSExtensionPointIdentifier`: `com.apple.Safari.web-extension`
+- `NSExtensionPrincipalClass`: `SafariWebExtensionHandler`
 
-`content.js` runs on page context menu events:
+`manifest.json` declares:
 
-```javascript
-document.addEventListener("contextmenu", (event) => {
-  const link = event.target.closest("a[href]");
-  safari.extension.setContextMenuEventUserInfo(event, {
-    url: link ? link.href : ""
-  });
-}, false);
-```
+- `contextMenus`
+- `nativeMessaging`
+- `tabs`
+- `webNavigation`
+- `<all_urls>`
+- `content.js` injected at `document_start`
 
-Automatic capture and `Download with Downloader` both call the same queue
-method. Queue entries contain the URL and an optional download kind; the reader
-also accepts the previous string-only queue format. `SafariWebExtensionHandler`:
+`background.js` creates the `Download with Downloader` link context menu with
+`browser.contextMenus`. Automatic capture and the context menu both call the
+same native-message path:
 
-1. Reads `userInfo["url"]`.
-2. Appends the link to the App Group file:
+1. `background.js` sends `auto-capture-download` to
+   `SafariWebExtensionHandler` with `browser.runtime.sendNativeMessage(...)`.
+2. `SafariWebExtensionHandler` reads `url`, optional `kind`, and optional
+   `displayName`.
+3. It appends the link to the App Group file:
 
 ```text
 group.com.sunnyyu.Downloader/pending-safari-downloads.json
 ```
 
-3. Posts distributed notification:
+4. It posts distributed notification:
 
 ```swift
 Notification.Name("com.sunnyyu.Downloader.addDownload")

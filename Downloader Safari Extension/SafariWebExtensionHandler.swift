@@ -2,7 +2,7 @@ import AppKit
 import SafariServices
 import os.log
 
-final class SafariWebExtensionHandler: SFSafariExtensionHandler {
+final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private static let downloadableExtensions: Set<String> = [
         "7z", "aac", "avi", "bin", "bz2", "csv", "dmg", "doc", "docx", "epub",
         "exe", "flac", "gif", "gz", "iso", "jpeg", "jpg", "m4a", "m4v", "mkv",
@@ -20,83 +20,75 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
 
     private let appGroupIdentifier = "group.com.sunnyyu.Downloader"
     private let queueFileName = "pending-safari-downloads.json"
-    private let downloadCommand = "download-link"
     private let autoCaptureKey = "automaticallyCaptureSafariDownloads"
     private let recentDownloadQueue = DispatchQueue(
         label: "com.sunnyyu.Downloader.SafariExtension.RecentDownloads"
     )
     private var recentDownloadDates: [String: Date] = [:]
 
-    override func page(_ page: SFSafariPage, willNavigateTo url: URL?) {
-        guard autoCaptureEnabled(),
-              let url,
-              isDirectDownloadURL(url),
-              enqueueAndOpenDownloader(
-                  url.absoluteString,
-                  kind: url.pathExtension.lowercased() == "torrent" ? "torrent" : nil,
-                  name: url.lastPathComponent
-              )
-        else { return }
-
-        page.getContainingTab { tab in
-            tab.close()
+    func beginRequest(with context: NSExtensionContext) {
+        let request = context.inputItems.first as? NSExtensionItem
+        let message: Any?
+        if #available(macOS 11.0, *) {
+            message = request?.userInfo?[SFExtensionMessageKey]
+        } else {
+            message = request?.userInfo?["message"]
         }
-        os_log(.default, "Automatically captured direct Safari navigation: %@", url.absoluteString)
-    }
 
-    override func validateContextMenuItem(
-        withCommand command: String,
-        in page: SFSafariPage,
-        userInfo: [String: Any]? = nil,
-        validationHandler: @escaping (Bool, String?) -> Void
-    ) {
-        guard command == downloadCommand else {
-            validationHandler(true, nil)
+        guard let userInfo = message as? [String: Any],
+              let messageName = userInfo["name"] as? String
+        else {
+            complete(context, response: ["accepted": false])
             return
         }
 
-        validationHandler(false, nil)
-    }
-
-    override func contextMenuItemSelected(
-        withCommand command: String,
-        in page: SFSafariPage,
-        userInfo: [String: Any]? = nil
-    ) {
-        guard command == downloadCommand,
-              let link = userInfo?["url"] as? String,
-              !link.isEmpty
-        else { return }
-
-        enqueueAndOpenDownloader(link, kind: nil, name: nil)
-        os_log(.default, "Queued Safari context menu download: %@", link)
-    }
-
-    override func messageReceived(
-        withName messageName: String,
-        from page: SFSafariPage,
-        userInfo: [String: Any]? = nil
-    ) {
         switch messageName {
         case "request-auto-capture-setting":
-            page.dispatchMessageToScript(
-                withName: "auto-capture-setting",
-                userInfo: ["enabled": autoCaptureEnabled()]
-            )
+            complete(context, response: [
+                "accepted": true,
+                "enabled": autoCaptureEnabled()
+            ])
         case "auto-capture-download":
             guard autoCaptureEnabled(),
-                  let link = userInfo?["url"] as? String,
+                  let link = userInfo["url"] as? String,
                   !link.isEmpty
-            else { return }
+            else {
+                complete(context, response: [
+                    "accepted": false,
+                    "enabled": autoCaptureEnabled(),
+                    "queued": false
+                ])
+                return
+            }
 
-            enqueueAndOpenDownloader(link, kind: userInfo?["kind"] as? String, name: nil)
+            let url = URL(string: link)
+            let name = (userInfo["displayName"] as? String)
+                ?? url.flatMap { Self.downloadableFileName(from: $0) }
+            let queued = enqueueAndOpenDownloader(
+                link,
+                kind: userInfo["kind"] as? String,
+                name: name
+            )
             os_log(.default, "Automatically captured Safari download: %@", link)
+            complete(context, response: [
+                "accepted": true,
+                "enabled": true,
+                "queued": queued
+            ])
         case "probe-download":
             guard autoCaptureEnabled(),
-                  let requestID = userInfo?["requestID"] as? String,
-                  let link = userInfo?["url"] as? String,
+                  let requestID = userInfo["requestID"] as? String,
+                  let link = userInfo["url"] as? String,
                   let url = URL(string: link)
-            else { return }
+            else {
+                complete(context, response: [
+                    "accepted": false,
+                    "enabled": autoCaptureEnabled(),
+                    "requestID": userInfo["requestID"] as? String ?? "",
+                    "isTorrent": false
+                ])
+                return
+            }
 
             probeDownload(url) { isTorrent, fileName in
                 if isTorrent {
@@ -104,17 +96,31 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
                     os_log(.default, "Automatically captured probed torrent: %@", link)
                 }
 
-                page.dispatchMessageToScript(
-                    withName: "download-probe-result",
-                    userInfo: [
-                        "requestID": requestID,
-                        "isTorrent": isTorrent
-                    ]
-                )
+                var response: [String: Any] = [
+                    "accepted": true,
+                    "enabled": true,
+                    "requestID": requestID,
+                    "isTorrent": isTorrent
+                ]
+                if let fileName {
+                    response["fileName"] = fileName
+                }
+                self.complete(context, response: response)
             }
         default:
+            complete(context, response: ["accepted": false])
             break
         }
+    }
+
+    private func complete(_ context: NSExtensionContext, response: [String: Any]) {
+        let item = NSExtensionItem()
+        if #available(macOS 11.0, *) {
+            item.userInfo = [SFExtensionMessageKey: response]
+        } else {
+            item.userInfo = ["message": response]
+        }
+        context.completeRequest(returningItems: [item], completionHandler: nil)
     }
 
     @discardableResult
@@ -138,6 +144,7 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
 
         let pathExtension = url.pathExtension.lowercased()
         return Self.downloadableExtensions.contains(pathExtension)
+            || Self.downloadableFileName(from: url) != nil
     }
 
     private func shouldEnqueueDownload(_ link: String) -> Bool {
@@ -267,6 +274,35 @@ final class SafariWebExtensionHandler: SFSafariExtensionHandler {
         let repairedName = repairUTF8Mojibake(in: name) ?? name
         let fileName = URL(fileURLWithPath: repairedName).lastPathComponent
         return fileName.isEmpty ? nil : fileName
+    }
+
+    private static func downloadableFileName(from url: URL) -> String? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+
+        let candidates = (components.queryItems ?? []).compactMap { item -> String? in
+            let lowerName = item.name.lowercased()
+            guard lowerName.contains("filename")
+                    || lowerName == "response-content-disposition"
+                    || lowerName == "rscd"
+                    || lowerName == "content-disposition"
+            else { return nil }
+            return item.value
+        }
+
+        for candidate in candidates {
+            let fileName = fileName(fromContentDisposition: candidate)
+                ?? sanitizedFileName(candidate)
+            if let fileName, hasDownloadableExtension(fileName) {
+                return fileName
+            }
+        }
+        return nil
+    }
+
+    private static func hasDownloadableExtension(_ fileName: String) -> Bool {
+        Self.downloadableExtensions.contains(URL(fileURLWithPath: fileName).pathExtension.lowercased())
     }
 
     private static func repairUTF8Mojibake(in value: String) -> String? {

@@ -8,40 +8,20 @@ const downloadableExtensions = new Set([
 
 let automaticallyCaptureDownloads = true;
 const pendingProbes = new Map();
+const capturedPageURLs = new Map();
+const pageCaptureWindow = 3000;
 
-safari.self.addEventListener("message", (event) => {
-  if (event.name === "auto-capture-setting") {
-    automaticallyCaptureDownloads = event.message && event.message.enabled === true;
-    return;
-  }
-
-  if (event.name === "download-probe-result") {
-    const requestID = event.message && event.message.requestID;
-    const pending = requestID ? pendingProbes.get(requestID) : null;
-    if (!pending) {
-      return;
-    }
-
-    pendingProbes.delete(requestID);
-    clearTimeout(pending.timeoutID);
-    if (event.message.isTorrent !== true) {
-      window.location.assign(pending.url);
-    }
-  }
-}, false);
-
-dispatchToExtension("request-auto-capture-setting");
+requestAutoCaptureSetting();
+captureCurrentLocationIfDownload();
 
 window.addEventListener("focus", () => {
-  dispatchToExtension("request-auto-capture-setting");
+  requestAutoCaptureSetting();
+  captureCurrentLocationIfDownload();
 });
 
-document.addEventListener("contextmenu", (event) => {
-  const link = closestLink(event);
-  safari.extension.setContextMenuEventUserInfo(event, {
-    url: link ? link.href : ""
-  });
-}, false);
+window.addEventListener("pageshow", () => {
+  captureCurrentLocationIfDownload();
+});
 
 document.addEventListener("click", (event) => {
   if (!automaticallyCaptureDownloads || event.defaultPrevented || event.button !== 0) {
@@ -79,15 +59,53 @@ document.addEventListener("click", (event) => {
 
   dispatchToExtension("auto-capture-download", {
     url: request.url,
-    kind: request.kind
+    kind: request.kind,
+    displayName: downloadableFileNameFromURL(new URL(request.url))
   });
 }, true);
 
 function dispatchToExtension(name, message) {
-  try {
-    safari.extension.dispatchMessage(name, message);
-  } catch (error) {
+  return browser.runtime.sendMessage({
+    name,
+    ...(message || {})
+  }).then((response) => {
+    handleExtensionResponse(name, response);
+    return response;
+  }).catch((error) => {
     console.error("Downloader Safari Extension:", error);
+    return null;
+  });
+}
+
+function requestAutoCaptureSetting() {
+  dispatchToExtension("request-auto-capture-setting");
+}
+
+function handleExtensionResponse(name, response) {
+  if (!response) {
+    return;
+  }
+
+  if (name === "request-auto-capture-setting" && typeof response.enabled === "boolean") {
+    automaticallyCaptureDownloads = response.enabled;
+    captureCurrentLocationIfDownload();
+    return;
+  }
+
+  if (name !== "probe-download") {
+    return;
+  }
+
+  const requestID = response.requestID;
+  const pending = requestID ? pendingProbes.get(requestID) : null;
+  if (!pending) {
+    return;
+  }
+
+  pendingProbes.delete(requestID);
+  clearTimeout(pending.timeoutID);
+  if (response.isTorrent !== true) {
+    window.location.assign(pending.url);
   }
 }
 
@@ -232,7 +250,7 @@ function isKnownDownloadURL(url) {
 
   const fileName = url.pathname.split("/").pop() || "";
   const extension = fileName.includes(".") ? fileName.split(".").pop().toLowerCase() : "";
-  return downloadableExtensions.has(extension);
+  return downloadableExtensions.has(extension) || downloadableFileNameFromQuery(url) !== null;
 }
 
 function torrentURLPattern(url) {
@@ -265,5 +283,105 @@ function normalizedURL(value) {
     return ["http:", "https:", "magnet:"].includes(url.protocol) ? url : null;
   } catch {
     return null;
+  }
+}
+
+function captureCurrentLocationIfDownload() {
+  if (!automaticallyCaptureDownloads) {
+    return;
+  }
+
+  const url = normalizedURL(window.location.href);
+  if (!url || !isKnownDownloadURL(url)) {
+    return;
+  }
+
+  if (!shouldCapturePageURL(url.href)) {
+    return;
+  }
+
+  dispatchToExtension("auto-capture-download", {
+    url: url.href,
+    kind: torrentURLPattern(url) ? "torrent" : null,
+    displayName: downloadableFileNameFromURL(url)
+  });
+}
+
+function shouldCapturePageURL(url) {
+  const now = Date.now();
+  for (const [capturedURL, capturedAt] of capturedPageURLs.entries()) {
+    if (now - capturedAt >= pageCaptureWindow) {
+      capturedPageURLs.delete(capturedURL);
+    }
+  }
+
+  const capturedAt = capturedPageURLs.get(url);
+  if (capturedAt && now - capturedAt < pageCaptureWindow) {
+    return false;
+  }
+
+  capturedPageURLs.set(url, now);
+  return true;
+}
+
+function downloadableFileNameFromQuery(url) {
+  const candidates = [];
+  for (const [key, value] of url.searchParams.entries()) {
+    const lowerKey = key.toLowerCase();
+    if (
+      lowerKey.includes("filename")
+      || lowerKey === "response-content-disposition"
+      || lowerKey === "rscd"
+      || lowerKey === "content-disposition"
+    ) {
+      candidates.push(value);
+    }
+  }
+
+  for (const candidate of candidates) {
+    const fileName = fileNameFromDisposition(candidate) || fileNameFromValue(candidate);
+    if (fileName && hasDownloadableExtension(fileName)) {
+      return fileName;
+    }
+  }
+  return null;
+}
+
+function downloadableFileNameFromURL(url) {
+  return downloadableFileNameFromQuery(url) || fileNameFromValue(url.pathname.split("/").pop() || "");
+}
+
+function fileNameFromDisposition(value) {
+  const utf8Match = value.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (utf8Match) {
+    return safeDecodeURIComponent(utf8Match[1].trim().replace(/^["']|["']$/g, ""));
+  }
+
+  const match = value.match(/filename\s*=\s*(?:"([^"]+)"|([^;]+))/i);
+  if (!match) {
+    return null;
+  }
+  return (match[1] || match[2] || "").trim().replace(/^["']|["']$/g, "");
+}
+
+function fileNameFromValue(value) {
+  const trimmed = value.trim().replace(/^["']|["']$/g, "");
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.split(/[\\/]/).pop();
+}
+
+function hasDownloadableExtension(fileName) {
+  const cleanName = fileName.split(/[?#]/)[0];
+  const extension = cleanName.includes(".") ? cleanName.split(".").pop().toLowerCase() : "";
+  return downloadableExtensions.has(extension);
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
   }
 }

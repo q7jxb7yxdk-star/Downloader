@@ -3,9 +3,16 @@
   "name": "Downloader Safari Extension",
   "version": "0.1.0",
   "description": "Send links from Safari to Downloader.",
-  "permissions": ["contextMenus", "tabs"],
+  "permissions": ["contextMenus", "nativeMessaging", "tabs", "webNavigation", "<all_urls>"],
   "background": {
     "scripts": ["background.js"],
     "persistent": false
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
 }
