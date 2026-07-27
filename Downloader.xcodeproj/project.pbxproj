@@ -606,7 +606,7 @@
 					"-lz",
 					"-liconv",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunnyyu.Downloader;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sunny.Downloader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -655,7 +655,7 @@
 					"-lz",
 					"-liconv",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sunnyyu.Downloader;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sunny.Downloader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
