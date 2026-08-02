@@ -870,11 +870,14 @@ the `probe-download` message. The native extension sends a GET request with:
 Range: bytes=0-0
 ```
 
-It checks `Content-Type` and `Content-Disposition` without downloading the
-whole file. A `.torrent` filename or `application/x-bittorrent` response is
-queued as BT and opens Downloader. Otherwise `download-probe-result` tells the
-injected script to continue the original Safari navigation. The probe has a
-10-second timeout.
+It checks `Content-Type`, `Content-Disposition`, and the final response URL
+without downloading the whole file. A `.torrent` filename or
+`application/x-bittorrent` response is queued as BT. A response that resolves to
+a known downloadable extension or download content type, such as
+`application/octet-stream` or `application/x-apple-diskimage`, is queued as a
+normal HTTP download. If the probe does not identify a download,
+`download-probe-result` tells the injected script to continue the original
+Safari navigation. The probe has a 10-second timeout.
 
 The extension parses both `filename=` and UTF-8 `filename*=` values from
 `Content-Disposition`-style strings. The sanitized final path component is
@@ -945,7 +948,7 @@ same native-message path:
 3. It appends the link to the App Group file:
 
 ```text
-group.com.sunnyyu.Downloader/pending-safari-downloads.json
+group.com.sunny.Downloader/pending-safari-downloads.json
 ```
 
 4. It posts distributed notification:

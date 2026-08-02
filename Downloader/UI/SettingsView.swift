@@ -2,7 +2,7 @@ import SwiftUI
 
 /// App 設定畫面。
 struct SettingsView: View {
-    private static let sharedDefaults = UserDefaults(suiteName: "group.com.sunnyyu.Downloader") ?? .standard
+    private static let sharedDefaults = UserDefaults(suiteName: "group.com.sunny.Downloader") ?? .standard
 
     /// Safari native extension 透過 App Group 讀取同一個設定。
     @AppStorage("automaticallyCaptureSafariDownloads", store: sharedDefaults)

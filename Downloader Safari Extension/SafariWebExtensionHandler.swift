@@ -18,7 +18,13 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         let name: String?
     }
 
-    private let appGroupIdentifier = "group.com.sunnyyu.Downloader"
+    private struct DownloadProbeResult {
+        let isTorrent: Bool
+        let isDownload: Bool
+        let fileName: String?
+    }
+
+    private let appGroupIdentifier = "group.com.sunny.Downloader"
     private let queueFileName = "pending-safari-downloads.json"
     private let autoCaptureKey = "automaticallyCaptureSafariDownloads"
     private let recentDownloadQueue = DispatchQueue(
@@ -90,19 +96,28 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 return
             }
 
-            probeDownload(url) { isTorrent, fileName in
-                if isTorrent {
-                    self.enqueueAndOpenDownloader(link, kind: "torrent", name: fileName)
-                    os_log(.default, "Automatically captured probed torrent: %@", link)
+            probeDownload(url) { result in
+                let queued: Bool
+                if result.isTorrent || result.isDownload {
+                    queued = self.enqueueAndOpenDownloader(
+                        link,
+                        kind: result.isTorrent ? "torrent" : nil,
+                        name: result.fileName
+                    )
+                    os_log(.default, "Automatically captured probed download: %@", link)
+                } else {
+                    queued = false
                 }
 
                 var response: [String: Any] = [
                     "accepted": true,
                     "enabled": true,
                     "requestID": requestID,
-                    "isTorrent": isTorrent
+                    "isTorrent": result.isTorrent,
+                    "isDownload": result.isDownload,
+                    "queued": queued
                 ]
-                if let fileName {
+                if let fileName = result.fileName {
                     response["fileName"] = fileName
                 }
                 self.complete(context, response: response)
@@ -199,7 +214,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
     private func probeDownload(
         _ url: URL,
-        completion: @escaping (Bool, String?) -> Void
+        completion: @escaping (DownloadProbeResult) -> Void
     ) {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -208,21 +223,26 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
         URLSession.shared.dataTask(with: request) { _, response, error in
             if let error {
-                os_log(.error, "Torrent probe failed for %{public}@: %{public}@", url.absoluteString, error.localizedDescription)
+                os_log(.error, "Download probe failed for %{public}@: %{public}@", url.absoluteString, error.localizedDescription)
             }
 
             let isTorrent: Bool
+            let isDownload: Bool
             var fileName: String?
             if let response = response as? HTTPURLResponse {
                 let contentType = response.value(forHTTPHeaderField: "Content-Type") ?? ""
                 let disposition = response.value(forHTTPHeaderField: "Content-Disposition") ?? ""
                 fileName = Self.sanitizedFileName(response.suggestedFilename)
                     ?? Self.fileName(fromContentDisposition: disposition)
+                    ?? response.url.flatMap { Self.downloadablePathFileName(from: $0) }
                 isTorrent = contentType.localizedCaseInsensitiveContains("application/x-bittorrent")
                     || fileName?.lowercased().hasSuffix(".torrent") == true
+                isDownload = isTorrent
+                    || fileName.map(Self.hasDownloadableExtension) == true
+                    || Self.isDownloadContentType(contentType)
                 os_log(
                     .default,
-                    "Torrent probe response %{public}ld for %{public}@; type=%{public}@; disposition=%{public}@",
+                    "Download probe response %{public}ld for %{public}@; type=%{public}@; disposition=%{public}@",
                     response.statusCode,
                     url.absoluteString,
                     contentType,
@@ -230,10 +250,11 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 )
             } else {
                 isTorrent = false
+                isDownload = false
             }
 
             DispatchQueue.main.async {
-                completion(isTorrent, fileName)
+                completion(DownloadProbeResult(isTorrent: isTorrent, isDownload: isDownload, fileName: fileName))
             }
         }.resume()
     }
@@ -303,6 +324,32 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
     private static func hasDownloadableExtension(_ fileName: String) -> Bool {
         Self.downloadableExtensions.contains(URL(fileURLWithPath: fileName).pathExtension.lowercased())
+    }
+
+    private static func downloadablePathFileName(from url: URL) -> String? {
+        guard let fileName = sanitizedFileName(url.lastPathComponent),
+              hasDownloadableExtension(fileName)
+        else {
+            return nil
+        }
+        return fileName
+    }
+
+    private static func isDownloadContentType(_ contentType: String) -> Bool {
+        let mediaType = contentType
+            .split(separator: ";", maxSplits: 1)
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        return [
+            "application/octet-stream",
+            "application/x-apple-diskimage",
+            "application/x-msdownload",
+            "application/zip",
+            "application/x-7z-compressed",
+            "application/x-rar-compressed",
+            "application/pdf"
+        ].contains(mediaType)
     }
 
     private static func repairUTF8Mojibake(in value: String) -> String? {

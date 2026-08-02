@@ -28,7 +28,7 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 - Xcode 16 or later recommended.
 - Swift 6 project settings.
 - Apple Development signing team for running the main app and Safari extension.
-- App Groups capability configured as `group.com.sunnyyu.Downloader`.
+- App Groups capability configured as `group.com.sunny.Downloader`.
 - Bundled libtorrent framework in `Vendor/Libtorrent/`.
 
 Users of the built app do not need to install `libtorrent-rasterbar` separately because it is embedded in the project.
@@ -67,7 +67,7 @@ Downloader/BrowserIntegration/   Custom URL scheme fallback handling
 5. Confirm App Groups contains:
 
 ```text
-group.com.sunnyyu.Downloader
+group.com.sunny.Downloader
 ```
 
 6. Repeat the same signing setup for `Downloader Safari Extension`.
@@ -217,9 +217,10 @@ common file extensions. Torrent buttons and links can also be recognized from
 their MIME type, filename, label, or torrent-related data attributes, even when
 the endpoint URL does not end in `.torrent`. Ambiguous `/file/` and `/download`
 links are checked with a one-byte Range request; Downloader captures the link
-only when its response headers identify a Torrent file. Dynamic downloads
-created entirely by JavaScript, authenticated POST requests, or `blob:` URLs
-may still require Safari's own download flow.
+when its response headers identify a Torrent file or a normal downloadable file
+such as a `.dmg`, `.iso`, or `.zip`. Dynamic downloads created entirely by
+JavaScript, authenticated POST requests, or `blob:` URLs may still require
+Safari's own download flow.
 
 Direct file URLs opened in Safari by another app, such as Telegram, are also
 captured when they end in a known downloadable extension. Redirected signed

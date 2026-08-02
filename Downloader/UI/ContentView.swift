@@ -164,7 +164,7 @@ struct ContentView: View {
             let name: String?
         }
 
-        let appGroupIdentifier = "group.com.sunnyyu.Downloader"
+        let appGroupIdentifier = "group.com.sunny.Downloader"
         let queueFileName = "pending-safari-downloads.json"
 
         guard let queueURL = FileManager.default

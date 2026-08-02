@@ -1,4 +1,4 @@
-const nativeApplicationIdentifier = "com.sunnyyu.Downloader.Downloader-Safari-Extension";
+const nativeApplicationIdentifier = "com.sunny.Downloader.Downloader-Safari-Extension";
 const menuId = "download-with-downloader";
 const recentCaptures = new Map();
 const duplicateWindow = 3000;
@@ -63,11 +63,17 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
       return;
     }
 
-    if (!isKnownDownloadURL(url) || !shouldCapture(details.url)) {
+    const knownDownload = isKnownDownloadURL(url);
+    const probableDownload = isProbableDownloadEndpoint(url);
+    if ((!knownDownload && !probableDownload) || !shouldCapture(details.url)) {
       return;
     }
 
-    queueDownload(details.url, torrentURLPattern(url) ? "torrent" : null, downloadableFileNameFromQuery(url))
+    const action = knownDownload
+      ? queueDownload(details.url, torrentURLPattern(url) ? "torrent" : null, downloadableFileNameFromQuery(url))
+      : probeDownload(details.url, `navigation-${details.tabId}-${Date.now()}`);
+
+    action
       .then((response) => {
         if (response && response.queued === true && details.tabId >= 0) {
           browser.tabs.remove(details.tabId).catch(() => {});
@@ -101,6 +107,18 @@ function queueDownload(url, kind, name) {
     url,
     kind,
     displayName: name
+  });
+}
+
+function probeDownload(url, requestID) {
+  if (!url) {
+    return Promise.resolve({ queued: false });
+  }
+
+  return sendNativeMessage({
+    name: "probe-download",
+    requestID,
+    url
   });
 }
 
@@ -141,6 +159,14 @@ function isKnownDownloadURL(url) {
   const fileName = url.pathname.split("/").pop() || "";
   const extension = fileName.includes(".") ? fileName.split(".").pop().toLowerCase() : "";
   return downloadableExtensions.has(extension) || downloadableFileNameFromQuery(url) !== null;
+}
+
+function isProbableDownloadEndpoint(url) {
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return false;
+  }
+
+  return /(^|\/)(file|download)(\/|$)/i.test(url.pathname);
 }
 
 function torrentURLPattern(url) {

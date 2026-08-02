@@ -104,7 +104,11 @@ function handleExtensionResponse(name, response) {
 
   pendingProbes.delete(requestID);
   clearTimeout(pending.timeoutID);
-  if (response.isTorrent !== true) {
+  if (response.queued === true) {
+    return;
+  }
+
+  if (response.isTorrent !== true && response.isDownload !== true) {
     window.location.assign(pending.url);
   }
 }
@@ -146,9 +150,8 @@ function downloadRequest(event) {
       };
     }
 
-    // A link label such as "torrent download" is only a hint. Some sites use
-    // an HTML landing page whose URL and text look like a torrent download.
-    // Probe the response before handing it to Downloader.
+    // Some sites use extensionless download endpoints that redirect to a real
+    // file URL. Probe the response before handing it to Downloader.
     if (isTorrentElement(link) || isProbableDownloadEndpoint(url)) {
       return {
         url: url.href,
