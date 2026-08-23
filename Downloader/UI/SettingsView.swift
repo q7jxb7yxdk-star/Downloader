@@ -15,12 +15,34 @@ struct SettingsView: View {
     @AppStorage("speedLimitKBps") private var speedLimitKBps = 0
 
     var body: some View {
-        Form {
-            Toggle("Automatically capture downloads from Safari", isOn: $automaticallyCaptureSafariDownloads)
-            Stepper("Concurrent downloads: \(maxConcurrentDownloads)", value: $maxConcurrentDownloads, in: 1...12)
-            Stepper("Speed limit: \(speedLimitKBps == 0 ? "Unlimited" : "\(speedLimitKBps) KB/s")", value: $speedLimitKBps, in: 0...100_000, step: 100)
+        Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 14) {
+            GridRow {
+                Text("Automatically capture downloads from Safari")
+
+                Toggle("Automatically capture downloads from Safari", isOn: $automaticallyCaptureSafariDownloads)
+                    .labelsHidden()
+                    .gridColumnAlignment(.trailing)
+            }
+
+            GridRow {
+                Text("Concurrent downloads")
+
+                Stepper(value: $maxConcurrentDownloads, in: 1...12) {
+                    Text("\(maxConcurrentDownloads)")
+                        .monospacedDigit()
+                }
+            }
+
+            GridRow {
+                Text("Speed limit")
+
+                Stepper(value: $speedLimitKBps, in: 0...100_000, step: 100) {
+                    Text(speedLimitKBps == 0 ? "Unlimited" : "\(speedLimitKBps) KB/s")
+                        .monospacedDigit()
+                }
+            }
         }
         .padding(24)
-        .frame(width: 420)
+        .frame(width: 500)
     }
 }
