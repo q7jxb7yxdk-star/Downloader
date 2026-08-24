@@ -158,18 +158,13 @@ files and partial segments, or selected BT files and their `.tmp` counterparts,
 are moved to macOS Trash before the task is removed from the list. If a file
 operation fails, that task remains in the app Trash with an error message.
 
-The trash operation prefers Finder automation:
-
-```swift
-delete POSIX file "<path>"
-delay 0.15
-```
-
-Downloader sends each path to Finder one at a time and inserts a short delay between paths. This is closest to a normal Finder trash action and avoids several delete sounds playing on top of each other. If Finder automation fails, Downloader falls back to:
+The trash operation uses the public system workspace API:
 
 ```swift
 NSWorkspace.shared.recycle(...)
 ```
+
+This moves the files to macOS Trash in the same manner as Finder without using Apple Events or requesting permission to control Finder.
 
 Because the file move is asynchronous, folder access uses the async `FolderBookmarkStore.withAccess(to:)` overload so security-scoped access remains active until the operation finishes.
 

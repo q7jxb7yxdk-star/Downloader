@@ -57,8 +57,6 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>Downloader uses Apple Events to move downloaded files to Trash with Finder and to resize Finder windows after opening downloaded torrent folders.</string>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>

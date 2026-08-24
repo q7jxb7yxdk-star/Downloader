@@ -518,7 +518,7 @@ final class DownloadManager: NSObject, ObservableObject {
         FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
 
         if isDirectory.boolValue {
-            openFolderInFinder(url, maximizeWindow: item.kind == .torrent)
+            NSWorkspace.shared.open(url)
         } else {
             NSWorkspace.shared.selectFile(
                 url.path(percentEncoded: false),
@@ -733,46 +733,10 @@ final class DownloadManager: NSObject, ObservableObject {
         }
 
         guard !urlsToTrash.isEmpty else { return }
-
-        do {
-            try trashItemsUsingFinder(urlsToTrash)
-        } catch {
-            // 如果使用者尚未允許 Apple Events 控制 Finder，仍然用系統 API 完成刪除。
-            try await recycleItemsUsingWorkspace(urlsToTrash)
-        }
+        try await recycleItemsUsingWorkspace(urlsToTrash)
     }
 
-    /// 讓 Finder 執行刪除，這是最接近 Finder 自己「移到垃圾桶」的方式，
-    /// 也最有機會在垃圾桶右鍵選單保留「放回原處 / Put Back」。
-    private func trashItemsUsingFinder(_ urls: [URL]) throws {
-        let commands = urls.enumerated().map { index, url in
-            var command = "delete POSIX file \"\(appleScriptEscaped(url.path(percentEncoded: false)))\""
-            if index < urls.count - 1 {
-                command += "\ndelay 0.15"
-            }
-            return command
-        }.joined(separator: "\n")
-
-        let source = """
-        tell application "Finder"
-        \(commands)
-        end tell
-        """
-
-        var scriptError: NSDictionary?
-        guard NSAppleScript(source: source)?.executeAndReturnError(&scriptError) != nil else {
-            let message = scriptError?[NSAppleScript.errorMessage] as? String ?? "Finder could not move the item to Trash."
-            throw NSError(domain: "Downloader.FinderTrash", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
-        }
-    }
-
-    private func appleScriptEscaped(_ string: String) -> String {
-        string
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-    }
-
-    /// Finder Apple Events 不可用時的 fallback。
+    /// 使用公開的 NSWorkspace API，把檔案以 Finder 相同方式移到 macOS Trash。
     private func recycleItemsUsingWorkspace(_ urlsToRecycle: [URL]) async throws {
         let expectedRecycleCount = urlsToRecycle.count
 
@@ -824,48 +788,6 @@ final class DownloadManager: NSObject, ObservableObject {
     /// 依照目前 Table selection 取出完整項目，並保持列表原本排序。
     private var selectedItems: [DownloadItem] {
         items.filter { selectedItemIDs.contains($0.id) }
-    }
-
-    /// 打開 Finder 資料夾。
-    ///
-    /// `NSWorkspace.shared.open` 只能打開資料夾，不能控制 Finder 視窗大小。
-    /// BT 資料夾通常內容較多，所以這裡可以在打開後透過 Apple Events
-    /// 把 Finder 最前面的視窗拉到螢幕可用範圍。
-    private func openFolderInFinder(_ url: URL, maximizeWindow: Bool) {
-        NSWorkspace.shared.open(url)
-        guard maximizeWindow else { return }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(350))
-            maximizeFrontFinderWindow()
-        }
-    }
-
-    /// 用 AppleScript 調整 Finder 最前面的視窗大小。
-    ///
-    /// macOS 會保護其他 App，所以第一次使用時可能會要求允許 Downloader 控制 Finder。
-    /// 如果使用者拒絕授權，資料夾仍會正常打開，只是不會自動放大。
-    private func maximizeFrontFinderWindow() {
-        guard let screen = NSScreen.main else { return }
-        let screenFrame = screen.frame
-        let visibleFrame = screen.visibleFrame
-
-        let left = Int(visibleFrame.minX)
-        let top = Int(screenFrame.maxY - visibleFrame.maxY)
-        let right = Int(visibleFrame.maxX)
-        let bottom = Int(screenFrame.maxY - visibleFrame.minY)
-
-        let source = """
-        tell application "Finder"
-            activate
-            try
-                set bounds of front window to {\(left), \(top), \(right), \(bottom)}
-            end try
-        end tell
-        """
-
-        var error: NSDictionary?
-        NSAppleScript(source: source)?.executeAndReturnError(&error)
     }
 
     /// 找出 Finder 應該顯示的位置。

@@ -141,7 +141,7 @@ The Trash sidebar keeps deleted tasks temporarily.
 
 `Delete with Files` removes selected tasks from the list and moves their local files, folders, or incomplete temporary files to the macOS Trash.
 
-Downloader first asks Finder to move the files to Trash, so macOS may ask for permission to control Finder. Files are sent to Finder one path at a time with a short delay, which keeps the trash action closer to normal Finder behavior and avoids overlapping delete sounds. If Finder automation is not available, Downloader falls back to the system workspace trash API.
+Downloader uses the system workspace API to move the files to Trash in the same manner as Finder, without requesting permission to control Finder.
 
 ## HTTP Segmented Downloads
 
