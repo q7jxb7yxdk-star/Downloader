@@ -11,12 +11,7 @@ const downloadableExtensions = new Set([
   "xz", "zip"
 ]);
 
-resetContextMenu();
-
-browser.runtime.onInstalled.addListener(() => {
-  resetContextMenu();
-});
-browser.runtime.onStartup.addListener(resetContextMenu);
+browser.runtime.onInstalled.addListener(resetContextMenu);
 
 browser.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId === menuId && info.linkUrl) {
@@ -88,12 +83,18 @@ if (browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
 }
 
 function resetContextMenu() {
-  browser.contextMenus.removeAll().finally(() => {
+  return browser.contextMenus.removeAll().then(() => {
     browser.contextMenus.create({
       id: menuId,
       title: "Download with Downloader",
       contexts: ["link"]
+    }, () => {
+      if (browser.runtime.lastError) {
+        console.error("Downloader Safari Extension context menu creation failed:", browser.runtime.lastError);
+      }
     });
+  }).catch((error) => {
+    console.error("Downloader Safari Extension context menu reset failed:", error);
   });
 }
 

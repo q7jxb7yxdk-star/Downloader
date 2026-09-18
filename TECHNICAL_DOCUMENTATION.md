@@ -932,9 +932,17 @@ authentication.
 - `<all_urls>`
 - `content.js` injected at `document_start`
 
+The manifest uses app-icon-derived PNGs at 48, 64, 96, 128, 256, and 512 pixels
+for Safari's extension list. Its `browser_action.default_icon` points to
+separate 16, 19, 32, and 38 pixel PNGs for the toolbar button. All referenced
+images are in `Resources/images`.
+
 `background.js` creates the `Download with Downloader` link context menu with
-`browser.contextMenus`. Automatic capture and the context menu both call the
-same native-message path:
+`browser.contextMenus`. Its nonpersistent background page resets that menu only
+from `runtime.onInstalled`: `removeAll()` completes before `create()` runs, and
+creation checks `runtime.lastError`. Background activation and browser startup
+do not independently recreate the same menu ID. Automatic capture and the
+context menu both call the same native-message path:
 
 1. `background.js` sends `auto-capture-download` to
    `SafariWebExtensionHandler` with `browser.runtime.sendNativeMessage(...)`.

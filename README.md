@@ -201,6 +201,9 @@ Completed files are renamed back to their final names.
 The project includes a Safari Web Extension target. It automatically captures
 explicit download links and also adds `Download with Downloader` to Safari's
 link context menu.
+Safari Settings and the extension's toolbar button use icons derived from the
+Downloader app icon. The toolbar button currently has no click action;
+automatic capture and the link context menu handle downloads.
 
 To use it:
 
