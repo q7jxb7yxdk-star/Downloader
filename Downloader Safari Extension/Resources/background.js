@@ -125,9 +125,9 @@ function probeDownload(url, requestID) {
 
 function sendNativeMessage(message) {
   return browser.runtime.sendNativeMessage(nativeApplicationIdentifier, message)
-    .catch((error) => {
-      console.error("Downloader Safari Extension native message failed:", error);
-      return { error: String(error) };
+    .catch(() => {
+      console.error("Downloader Safari Extension native message failed; download was not accepted");
+      return { accepted: false, queued: false, requestID: message.requestID };
     });
 }
 

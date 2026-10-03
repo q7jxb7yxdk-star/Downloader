@@ -8,6 +8,16 @@ import Foundation
 /// HTTP 分段下載、BT metadata、libtorrent bridge 等細節。
 @MainActor
 final class DownloadManager: NSObject, ObservableObject {
+    struct PersistenceNotice: Identifiable {
+        let id = UUID()
+        let message: String
+    }
+
+    /// One alert per distinct persistence failure/recovery, rather than one per progress tick.
+    @Published var persistenceNotice: PersistenceNotice?
+    @Published private(set) var persistenceWarning: String?
+    private var reportedPersistenceMessages: Set<String> = []
+
     /// 所有下載項目。`@Published` 會讓 SwiftUI 在資料改變時自動重畫列表。
     @Published var items: [DownloadItem] = []
 
@@ -54,7 +64,9 @@ final class DownloadManager: NSObject, ObservableObject {
     override init() {
         super.init()
         // App 啟動時先載入上次保存的任務列表。
-        items = store.load()
+        let loaded = store.load()
+        items = loaded.items
+        if let notice = loaded.notice { reportPersistenceIssue(notice) }
         // libtorrent session 不會跨 App process 保存；重開 App 後由使用者按 Resume 重新開始 seeding。
         for index in items.indices where items[index].kind == .torrent && items[index].status == .completed {
             items[index].isTorrentSeeding = false
@@ -69,6 +81,29 @@ final class DownloadManager: NSObject, ObservableObject {
         kind requestedKind: DownloadKind? = nil,
         name requestedName: String? = nil
     ) {
+        _ = insertDownload(id: UUID(), url: url, destination: destination, kind: requestedKind, name: requestedName)
+    }
+
+    /// Acknowledge Safari requests only after their stable ID is durably saved.
+    /// Retries for existing IDs never restart engines or change the existing item.
+    func importSafariDownload(
+        id: UUID,
+        url: URL,
+        destination: URL?,
+        kind: DownloadKind?,
+        name: String?
+    ) -> Bool {
+        if items.contains(where: { $0.id == id }) { return persistItems() }
+        return insertDownload(id: id, url: url, destination: destination, kind: kind, name: name)
+    }
+
+    private func insertDownload(
+        id: UUID,
+        url: URL,
+        destination: URL?,
+        kind requestedKind: DownloadKind?,
+        name requestedName: String?
+    ) -> Bool {
         // 用 URL 形式判斷下載類型：magnet 和 .torrent 交給 BT engine，其他交給 HTTP。
         let kind: DownloadKind = requestedKind
             ?? (url.absoluteString.hasPrefix("magnet:") || url.pathExtension.lowercased() == "torrent" ? .torrent : .http)
@@ -82,17 +117,21 @@ final class DownloadManager: NSObject, ObservableObject {
             destination: destination,
             kind: kind
         )
+        item.id = id
         if kind == .torrent, !url.isFileURL, !url.absoluteString.hasPrefix("magnet:") {
             item.status = .downloading
             item.errorMessage = "Downloading torrent metadata"
         }
         items.insert(item, at: 0)
+        guard persistItems() else {
+            items.removeAll { $0.id == id }
+            return false
+        }
         selectedItemIDs = [item.id]
-        store.save(items)
 
         if kind == .torrent, !url.isFileURL, !url.absoluteString.hasPrefix("magnet:") {
             downloadRemoteTorrentMetadata(for: item.id, from: url)
-            return
+            return true
         }
 
         // DownloadManager 只決定「交給誰」，真正下載細節留給各 engine。
@@ -102,6 +141,24 @@ final class DownloadManager: NSObject, ObservableObject {
         case .torrent:
             torrentEngine.start(item: item)
         }
+        return true
+    }
+
+    @discardableResult
+    private func persistItems() -> Bool {
+        do {
+            try store.save(items)
+            return true
+        } catch {
+            reportPersistenceIssue(error.localizedDescription)
+            return false
+        }
+    }
+
+    private func reportPersistenceIssue(_ message: String) {
+        persistenceWarning = message
+        guard reportedPersistenceMessages.insert(message).inserted else { return }
+        persistenceNotice = PersistenceNotice(message: message)
     }
 
     /// Table row 被點擊時整理 selection。
@@ -247,7 +304,7 @@ final class DownloadManager: NSObject, ObservableObject {
                 items[index].source = localURL
                 items[index].status = .queued
                 items[index].errorMessage = nil
-                store.save(items)
+                persistItems()
                 torrentEngine.start(item: items[index])
             } catch {
                 fail(id: itemID, errorMessage: error.localizedDescription)
@@ -306,7 +363,7 @@ final class DownloadManager: NSObject, ObservableObject {
         }
 
         selectedItemIDs = Set(itemsToDelete.map(\.id))
-        store.save(items)
+        persistItems()
     }
 
     /// 刪除目前選中的任務，並把相關本機檔案移到 macOS Trash。
@@ -351,7 +408,7 @@ final class DownloadManager: NSObject, ObservableObject {
             selectedItemIDs = Set(items.prefix(1).map(\.id))
         }
 
-        store.save(items)
+        persistItems()
     }
 
     /// 使用者在 BT 檔案選擇 sheet 按下開始後呼叫。
@@ -393,14 +450,14 @@ final class DownloadManager: NSObject, ObservableObject {
             items[index].bytesPerSecond = 0
             items[index].uploadBytesPerSecond = 0
             items[index].errorMessage = nil
-            store.save(items)
+            persistItems()
             return
         }
 
         items.remove(at: index)
         selectedItemIDs = Set(items.prefix(1).map(\.id))
         torrentFileSelection = nil
-        store.save(items)
+        persistItems()
     }
 
     /// Engine 回報進度時呼叫。所有 UI 進度更新都集中在這裡。
@@ -448,7 +505,7 @@ final class DownloadManager: NSObject, ObservableObject {
     func flushScheduledSave() {
         scheduledSaveTask?.cancel()
         scheduledSaveTask = nil
-        store.save(items)
+        persistItems()
     }
 
     /// Engine 回報下載完成。
@@ -490,7 +547,7 @@ final class DownloadManager: NSObject, ObservableObject {
         if !wasAlreadyCompleted {
             NotificationManager.shared.downloadDidFinish(name: items[index].name)
         }
-        store.save(items)
+        persistItems()
     }
 
     /// 已完成 BT 的 libtorrent session 回報目前上載速度。
@@ -571,7 +628,7 @@ final class DownloadManager: NSObject, ObservableObject {
             items[index].uploadBytesPerSecond = 0
         }
         items[index].errorMessage = errorMessage
-        store.save(items)
+        persistItems()
     }
 
     /// 合併高頻進度更新的保存工作。
@@ -584,7 +641,7 @@ final class DownloadManager: NSObject, ObservableObject {
         scheduledSaveTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(750))
             guard !Task.isCancelled else { return }
-            store.save(items)
+            persistItems()
             scheduledSaveTask = nil
         }
     }
@@ -602,7 +659,7 @@ final class DownloadManager: NSObject, ObservableObject {
         items[index].bytesPerSecond = 0
         items[index].uploadBytesPerSecond = 0
         items[index].isTorrentSeeding = false
-        store.save(items)
+        persistItems()
     }
 
     private func setTorrentSeeding(id: DownloadItem.ID, isSeeding: Bool) {
@@ -616,7 +673,7 @@ final class DownloadManager: NSObject, ObservableObject {
             items[index].uploadBytesPerSecond = 0
         }
         items[index].errorMessage = isSeeding ? "Starting" : nil
-        store.save(items)
+        persistItems()
     }
 
     /// 停止 engine 內正在跑的下載並清理 engine 狀態。

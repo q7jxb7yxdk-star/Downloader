@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "name": "versioned-example.bin",
+      "source": "https://example.invalid/versioned-example.bin",
+      "kind": "http",
+      "status": "paused",
+      "bytesReceived": 128,
+      "bytesExpected": 1024
+    }
+  ]
+}

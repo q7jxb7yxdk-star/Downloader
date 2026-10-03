@@ -2,7 +2,7 @@
 
 **Effective date:** August 7, 2026
 
-**Last updated:** August 7, 2026
+**Last updated:** October 3, 2026
 
 Downloader is a macOS download manager with HTTP/HTTPS, BitTorrent, and Safari Extension features. This Privacy Policy explains what information the app processes, where that processing occurs, and the choices available to you.
 
@@ -19,6 +19,7 @@ Downloader may store the following information locally:
 - Download URLs, including magnet links
 - File names, selected file paths, and download destinations
 - Download progress, status, speed, error information, and task history
+- A previous valid download-list backup and preserved copies of corrupt download-list data for local recovery
 - Torrent metadata and selected torrent file information
 - Security-scoped bookmarks that allow continued access to folders you select
 - App preferences and Safari Extension settings
@@ -52,6 +53,8 @@ The developer does not receive, sell, rent, or use your personal information for
 ## Retention and Deletion
 
 Local download records remain on your Mac until you remove them. Moving a task to Downloader's Trash does not immediately delete the record or its downloaded files. You can permanently remove a task from Downloader's Trash, and you can choose **Delete with Files** when you also want the associated files moved to the macOS Trash.
+
+The app also keeps one previous valid list snapshot and may preserve corrupt list files for recovery. Removing a task does not immediately remove its record from an older backup or preserved corruption copy. Those files remain local and can be removed separately using Finder after you no longer need them for recovery.
 
 You may separately delete downloaded files, temporary files, app preferences, or other app data using Finder and macOS. Uninstalling the app does not necessarily delete files saved in folders you selected. Because the developer does not receive your app data, there is no developer-held account or personal-data record to delete.
 

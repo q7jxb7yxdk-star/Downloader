@@ -61,6 +61,11 @@ document.addEventListener("click", (event) => {
     url: request.url,
     kind: request.kind,
     displayName: downloadableFileNameFromURL(new URL(request.url))
+  }).then((response) => {
+    // A cancelled click must fall back when the native queue did not accept it.
+    if (!response || response.queued !== true) {
+      window.location.assign(request.url);
+    }
   });
 }, true);
 
@@ -71,8 +76,8 @@ function dispatchToExtension(name, message) {
   }).then((response) => {
     handleExtensionResponse(name, response);
     return response;
-  }).catch((error) => {
-    console.error("Downloader Safari Extension:", error);
+  }).catch(() => {
+    console.error("Downloader Safari Extension message failed");
     return null;
   });
 }
@@ -108,9 +113,8 @@ function handleExtensionResponse(name, response) {
     return;
   }
 
-  if (response.isTorrent !== true && response.isDownload !== true) {
-    window.location.assign(pending.url);
-  }
+  // Classification is insufficient: the queue must confirm durable acceptance.
+  window.location.assign(pending.url);
 }
 
 function closestLink(event) {

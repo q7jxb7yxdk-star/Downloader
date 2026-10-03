@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        B10000000000000000000001 /* PendingSafariDownloadQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003; };
+        B10000000000000000000002 /* PendingSafariDownloadQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003; };
+        B10000000000000000000004 /* THIRD_PARTY_NOTICES.txt in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005; };
 		96A40A8F2FB0249000F5D6C9 /* Downloader Safari Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 96A40A772FB0249000F5D6C9 /* Downloader Safari Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA0000010000000000000001 /* App/DownloaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000101 /* App/DownloaderApp.swift */; };
 		AA0000010000000000000002 /* UI/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000102 /* UI/ContentView.swift */; };
@@ -56,6 +59,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        B10000000000000000000003 /* Shared/PendingSafariDownloadQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/PendingSafariDownloadQueue.swift; sourceTree = SOURCE_ROOT; };
+        B10000000000000000000005 /* THIRD_PARTY_NOTICES.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Vendor/Libtorrent/THIRD_PARTY_NOTICES.txt; sourceTree = SOURCE_ROOT; };
 		96A40A772FB0249000F5D6C9 /* Downloader Safari Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Downloader Safari Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000010000000000000100 /* Downloader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Downloader.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000010000000000000101 /* App/DownloaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/DownloaderApp.swift; sourceTree = "<group>"; };
@@ -136,6 +141,8 @@
 			isa = PBXGroup;
 			children = (
 				AA0000010000000000000301 /* Downloader */,
+                B10000000000000000000003 /* Shared/PendingSafariDownloadQueue.swift */,
+                B10000000000000000000005 /* THIRD_PARTY_NOTICES.txt */,
 				AA0000010000000000000302 /* SafariExtension */,
 				AA0000010000000000000123 /* Vendor/Libtorrent/libtorrent-rasterbar.xcframework */,
 				AA0000010000000000000124 /* SystemConfiguration.framework */,
@@ -286,6 +293,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                B10000000000000000000004 /* THIRD_PARTY_NOTICES.txt in Resources */,
 				AA0000010000000000000021 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -297,6 +305,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                B10000000000000000000002 /* PendingSafariDownloadQueue.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -304,6 +313,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                B10000000000000000000001 /* PendingSafariDownloadQueue.swift in Sources */,
 				AA0000010000000000000001 /* App/DownloaderApp.swift in Sources */,
 				AA0000010000000000000002 /* UI/ContentView.swift in Sources */,
 				AA0000010000000000000003 /* UI/SidebarView.swift in Sources */,

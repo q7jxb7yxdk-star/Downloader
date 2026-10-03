@@ -24,9 +24,10 @@ Downloader is a macOS SwiftUI download manager inspired by Folx. It supports nor
 
 ## Requirements
 
-- macOS 14 or later.
-- Xcode 16 or later recommended.
-- Swift 6 project settings.
+- Current app and Safari extension targets specify macOS 27.0. Older macOS support has not been validated; project-level macOS 14 settings do not override the target minimum.
+- Apple Silicon: the bundled libtorrent XCFramework contains arm64 only. Intel support has not been validated.
+- A compatible Xcode SDK for the configured target minimum. Record the actual successful toolchain in `Docs/VALIDATION_RECORD.md`.
+- Swift 6 main-app settings; Swift 5 native-extension settings.
 - Apple Development signing team for running the main app and Safari extension.
 - App Groups capability configured as `group.com.sunny.Downloader`.
 - Bundled libtorrent framework in `Vendor/Libtorrent/`.
@@ -283,6 +284,22 @@ https://httpbin.org/stream-bytes/1048576
 ```
 
 ## Documentation
+
+- [Maintenance and release gates](MAINTENANCE.md)
+- [Manual regression matrix](Docs/MANUAL_VALIDATION.md)
+- [Validation record](Docs/VALIDATION_RECORD.md)
+- [Change log](CHANGELOG.md)
+- [Dependency inventory](DEPENDENCIES.json)
+
+Local static checks (no app build or tests):
+
+```zsh
+python3 Scripts/validate_static.py --swift-syntax
+```
+
+The shipped Safari extension uses `Downloader Safari Extension/Resources`.
+`SafariExtension/` is a retained reference prototype, not the shipped resource source.
+Intermediate `Vendor/Libtorrent/_build/` files are local-only; the XCFramework remains vendored.
 
 For architecture, code explanations, UI column notes, sandbox details, BT flow, and common Xcode Debug Area messages, see:
 

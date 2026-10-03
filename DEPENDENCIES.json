@@ -1,0 +1,23 @@
+{
+  "inventoryVersion": 1,
+  "recordedOn": "2026-10-03",
+  "vcpkgCommit": "ce613c41372b23b1f51333815feb3edd87ef8a8b",
+  "vcpkgTagAtBaseline": "2025.04.09",
+  "evidenceBoundary": "Header versions, package checkout and existing artifact hashes; binary was not rebuilt or runtime-verified. The pre-existing framework label differs from libtorrent headers.",
+  "libraries": [
+    {
+      "identifier": "macos-arm64",
+      "architectures": [
+        "arm64"
+      ],
+      "headerVersions": {
+        "libtorrent": "2.0.11.0",
+        "boost": "1.87",
+        "openssl": "OpenSSL 3.5.0 8 Apr 2025"
+      },
+      "frameworkVersionLabel": "2.0.12",
+      "binarySHA256": "be0a9b3c6cc125b3bac5e65e3a2a16aca3511f7906337bfea1314755a2820229",
+      "xcframeworkTreeSHA256": "c8443ce13d890884b1b9e2a2b4b56f39250b096f29acc499846a54c2b96424e8"
+    }
+  ]
+}

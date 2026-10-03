@@ -29,19 +29,7 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
-      <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "968B13B2301E172A0096EF32"
-               BuildableName = "DownloaderUITests.xctest"
-               BlueprintName = "DownloaderUITests"
-               ReferencedContainer = "container:Downloader.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-      </Testables>
+      <Testables/>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

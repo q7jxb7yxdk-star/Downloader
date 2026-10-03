@@ -1,39 +1,139 @@
 import Foundation
 
-/// 負責把下載列表保存成 JSON。
-///
-/// 注意：這裡只保存「列表狀態」，不保存 URLSession task 或 libtorrent session。
-/// 所以下次開 App 時，進行中的任務會被還原成 paused，避免 UI 顯示正在下載但實際沒有 task。
+/// Versioned download-list persistence. Live engine sessions are never restored.
 final class DownloadStore {
-    private let fileURL: URL
-
-    init() {
-        // Application Support 是 macOS App 保存自身資料的標準位置。
-        let supportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "Downloader", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
-        fileURL = supportDirectory.appending(path: "downloads.json")
+    struct LoadResult {
+        let items: [DownloadItem]
+        let notice: String?
     }
 
-    /// 從 JSON 讀回下載列表。
-    func load() -> [DownloadItem] {
-        guard let data = try? Data(contentsOf: fileURL) else { return [] }
-        let items = (try? JSONDecoder().decode([DownloadItem].self, from: data)) ?? []
-        return items.map { item in
-            var restored = item
-            // App 重開後舊 task 已不存在，所以把下載中狀態改成暫停。
-            if restored.status == .downloading {
-                restored.status = .paused
-                restored.bytesPerSecond = 0
-                restored.uploadBytesPerSecond = 0
+    private struct Envelope: Codable {
+        let schemaVersion: Int
+        let items: [DownloadItem]
+    }
+
+    private struct Header: Decodable {
+        let schemaVersion: Int
+    }
+
+    private enum StoreError: LocalizedError {
+        case unsupportedVersion(Int)
+        case blocked(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .unsupportedVersion(let version):
+                return "Download data uses unsupported schema version \(version). Open it with a compatible app version. Saving is disabled to protect the original data."
+            case .blocked(let message):
+                return message
             }
-            return restored
         }
     }
 
-    /// 用 atomic 寫入，避免寫到一半 App 中斷時留下半個 JSON 檔。
-    func save(_ items: [DownloadItem]) {
-        guard let data = try? JSONEncoder().encode(items) else { return }
-        try? data.write(to: fileURL, options: .atomic)
+    private static let schemaVersion = 1
+    private let fileURL: URL
+    private let backupURL: URL
+    private var lastGoodData: Data?
+    private var blockedReason: String?
+    private var didLoad = false
+
+    /// The optional location allows isolated persistence diagnostics without touching user data.
+    init(fileURL: URL? = nil) {
+        let supportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: "Downloader", directoryHint: .isDirectory)
+        self.fileURL = fileURL ?? supportDirectory.appending(path: "downloads.json")
+        backupURL = self.fileURL.appendingPathExtension("backup")
+    }
+
+    func load() -> LoadResult {
+        didLoad = true
+        blockedReason = nil
+        lastGoodData = nil
+        let manager = FileManager.default
+        guard manager.fileExists(atPath: fileURL.path) else {
+            guard manager.fileExists(atPath: backupURL.path) else {
+                return LoadResult(items: [], notice: nil)
+            }
+            return recoverFromBackup(preservedURL: nil)
+        }
+
+        do {
+            let data = try Data(contentsOf: fileURL)
+            do {
+                let items = try decode(data)
+                lastGoodData = data
+                return LoadResult(items: restored(items), notice: nil)
+            } catch StoreError.unsupportedVersion(let version) {
+                return blocked(StoreError.unsupportedVersion(version).localizedDescription)
+            } catch {
+                // Keep the exact original bytes before allowing any replacement of corrupt data.
+                let preservedURL = fileURL.deletingLastPathComponent()
+                    .appendingPathComponent("downloads.corrupt-\(UUID().uuidString).json")
+                do {
+                    try data.write(to: preservedURL, options: .atomic)
+                } catch {
+                    return blocked("Download data could not be decoded or preserved: \(error.localizedDescription). Saving is disabled. Original data: \(fileURL.path)")
+                }
+                return recoverFromBackup(preservedURL: preservedURL)
+            }
+        } catch {
+            return blocked("Download data could not be read: \(error.localizedDescription). Saving is disabled. Original data: \(fileURL.path)")
+        }
+    }
+
+    /// Save the previous validated snapshot first; replace the primary only after that succeeds.
+    func save(_ items: [DownloadItem]) throws {
+        guard didLoad else {
+            throw StoreError.blocked("Download data must be loaded before saving.")
+        }
+        if let blockedReason { throw StoreError.blocked(blockedReason) }
+        let data = try JSONEncoder().encode(Envelope(schemaVersion: Self.schemaVersion, items: items))
+        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try (lastGoodData ?? data).write(to: backupURL, options: .atomic)
+        try data.write(to: fileURL, options: .atomic)
+        lastGoodData = data
+    }
+
+    private func decode(_ data: Data) throws -> [DownloadItem] {
+        let decoder = JSONDecoder()
+        // Legacy releases wrote a bare array. Only arrays use that migration path.
+        if let first = data.first(where: { ![UInt8(32), 9, 10, 13].contains($0) }), first == 91 {
+            return try decoder.decode([DownloadItem].self, from: data)
+        }
+        let header = try decoder.decode(Header.self, from: data)
+        guard header.schemaVersion == Self.schemaVersion else {
+            throw StoreError.unsupportedVersion(header.schemaVersion)
+        }
+        return try decoder.decode(Envelope.self, from: data).items
+    }
+
+    private func recoverFromBackup(preservedURL: URL?) -> LoadResult {
+        let preservation = preservedURL.map { " Original data preserved at \($0.path)." } ?? ""
+        do {
+            let data = try Data(contentsOf: backupURL)
+            let items = try decode(data)
+            lastGoodData = data
+            return LoadResult(items: restored(items), notice: "Recovered the download list from the last good backup. Recent changes may be missing.\(preservation)")
+        } catch {
+            return blocked("Download data could not be recovered from the backup: \(error.localizedDescription). Saving is disabled.\(preservation) Data location: \(fileURL.path)")
+        }
+    }
+
+    private func blocked(_ message: String) -> LoadResult {
+        blockedReason = message
+        return LoadResult(items: [], notice: message)
+    }
+
+    private func restored(_ items: [DownloadItem]) -> [DownloadItem] {
+        items.map { item in
+            var restored = item
+            if restored.status == .downloading {
+                restored.status = .paused
+            }
+            restored.bytesPerSecond = 0
+            restored.uploadBytesPerSecond = 0
+            restored.isTorrentSeeding = false
+            return restored
+        }
     }
 }

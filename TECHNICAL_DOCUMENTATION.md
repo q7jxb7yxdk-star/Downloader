@@ -527,6 +527,15 @@ Downloaded task state is stored here:
 
 On app restart, old `.downloading` tasks are restored as `.paused`, because URLSession tasks and libtorrent handles from the previous process no longer exist.
 
+The store writes schema 1 (`schemaVersion` and `items`) and accepts legacy bare
+arrays. Before replacing the primary, it atomically saves the previous validated
+snapshot to `downloads.json.backup`. Corrupt primary bytes are preserved in a
+unique `downloads.corrupt-<UUID>.json` before backup recovery. Recovery reports
+that recent changes may be missing. Unsupported schemas, unreadable data or
+unrecoverable corruption disable saves instead of silently overwriting the list.
+`DownloadManager` publishes deduplicated persistence notices; new tasks start
+only after their initial save succeeds. See `MAINTENANCE.md` for rollback limits.
+
 ## Notifications
 
 Location:
@@ -964,11 +973,18 @@ The distributed notification uses `object: nil`. The URL is not passed through t
 
 The main app listens in `ContentView`, then `flushPendingSafariDownloads()`:
 
-1. Opens the App Group queue.
-2. Decodes pending links.
-3. Clears the queue.
-4. Adds each valid URL using the last selected download folder.
-5. Brings Downloader to the foreground.
+1. Reads a snapshot under the shared nonblocking file lock.
+2. Migrates legacy links to stable UUIDs and saves those IDs before import.
+3. Adds valid downloads with those UUIDs and persists the task list before starting engines.
+4. Re-reads the queue under the lock and acknowledges only successfully saved IDs, preserving concurrently appended and failed entries.
+5. Brings Downloader to the foreground after successful imports.
+
+`Shared/PendingSafariDownloadQueue.swift` is compiled into both targets. Failed
+acknowledgments retry without restarting tasks whose UUIDs are already saved.
+Invalid/corrupt entries are retained with a warning. Native messaging reports
+queue acceptance only after the queue save; content scripts fall back to browser
+navigation on failed acceptance. Old extension binaries that ignore the lock
+must not be run concurrently with the new protocol. Runtime verification is pending.
 
 The extension derives the containing `Downloader.app` URL from its `.appex`
 bundle path and calls `NSWorkspace.openApplication`. If that fails, it falls

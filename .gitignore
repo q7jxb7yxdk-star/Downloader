@@ -3,3 +3,8 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 .DS_Store
+Vendor/Libtorrent/_build/
+__pycache__/
+
+# Local cross-project maintenance records
+/Maintenance/

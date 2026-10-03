@@ -12,12 +12,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     ]
     private static let duplicateWindow: TimeInterval = 3
 
-    private struct PendingSafariDownload: Codable {
-        let url: String
-        let kind: String?
-        let name: String?
-    }
-
     private struct DownloadProbeResult {
         let isTorrent: Bool
         let isDownload: Bool
@@ -25,7 +19,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     }
 
     private let appGroupIdentifier = "group.com.sunny.Downloader"
-    private let queueFileName = "pending-safari-downloads.json"
     private let autoCaptureKey = "automaticallyCaptureSafariDownloads"
     private let recentDownloadQueue = DispatchQueue(
         label: "com.sunnyyu.Downloader.SafariExtension.RecentDownloads"
@@ -75,9 +68,9 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 kind: userInfo["kind"] as? String,
                 name: name
             )
-            os_log(.default, "Automatically captured Safari download: %@", link)
+            os_log(.default, "Safari download queue result: %{public}@", queued ? "saved" : "retry")
             complete(context, response: [
-                "accepted": true,
+                "accepted": queued,
                 "enabled": true,
                 "queued": queued
             ])
@@ -104,13 +97,13 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                         kind: result.isTorrent ? "torrent" : nil,
                         name: result.fileName
                     )
-                    os_log(.default, "Automatically captured probed download: %@", link)
+                    os_log(.default, "Probed download queue result: %{public}@", queued ? "saved" : "retry")
                 } else {
                     queued = false
                 }
 
                 var response: [String: Any] = [
-                    "accepted": true,
+                    "accepted": !(result.isTorrent || result.isDownload) || queued,
                     "enabled": true,
                     "requestID": requestID,
                     "isTorrent": result.isTorrent,
@@ -140,9 +133,22 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
     @discardableResult
     private func enqueueAndOpenDownloader(_ link: String, kind: String?, name: String?) -> Bool {
-        guard shouldEnqueueDownload(link) else { return false }
-
-        enqueueDownload(link, kind: kind, name: name)
+        let queued = recentDownloadQueue.sync { () -> Bool in
+            let now = Date()
+            recentDownloadDates = recentDownloadDates.filter {
+                now.timeIntervalSince($0.value) < Self.duplicateWindow
+            }
+            if recentDownloadDates[link] != nil { return true }
+            do {
+                try PendingSafariDownloadQueue.appGroupQueue().append(url: link, kind: kind, name: name)
+                recentDownloadDates[link] = now
+                return true
+            } catch {
+                os_log(.error, "Unable to save Safari download queue; caller may retry")
+                return false
+            }
+        }
+        guard queued else { return false }
         DistributedNotificationCenter.default().postNotificationName(
             Notification.Name("com.sunnyyu.Downloader.addDownload"),
             object: nil,
@@ -160,23 +166,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         let pathExtension = url.pathExtension.lowercased()
         return Self.downloadableExtensions.contains(pathExtension)
             || Self.downloadableFileName(from: url) != nil
-    }
-
-    private func shouldEnqueueDownload(_ link: String) -> Bool {
-        recentDownloadQueue.sync {
-            let now = Date()
-            recentDownloadDates = recentDownloadDates.filter {
-                now.timeIntervalSince($0.value) < Self.duplicateWindow
-            }
-
-            guard let previousDate = recentDownloadDates[link],
-                  now.timeIntervalSince(previousDate) < Self.duplicateWindow
-            else {
-                recentDownloadDates[link] = now
-                return true
-            }
-            return false
-        }
     }
 
     private func openContainingApp() {
@@ -222,8 +211,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
 
         URLSession.shared.dataTask(with: request) { _, response, error in
-            if let error {
-                os_log(.error, "Download probe failed for %{public}@: %{public}@", url.absoluteString, error.localizedDescription)
+            if error != nil {
+                os_log(.error, "Download probe failed")
             }
 
             let isTorrent: Bool
@@ -240,14 +229,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 isDownload = isTorrent
                     || fileName.map(Self.hasDownloadableExtension) == true
                     || Self.isDownloadContentType(contentType)
-                os_log(
-                    .default,
-                    "Download probe response %{public}ld for %{public}@; type=%{public}@; disposition=%{public}@",
-                    response.statusCode,
-                    url.absoluteString,
-                    contentType,
-                    disposition
-                )
+                os_log(.default, "Download probe response: %{public}ld", response.statusCode)
             } else {
                 isTorrent = false
                 isDownload = false
@@ -364,35 +346,4 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         return repaired
     }
 
-    private func enqueueDownload(_ link: String, kind: String?, name: String?) {
-        guard let queueURL = sharedQueueURL() else { return }
-
-        var pending = pendingDownloads(from: queueURL)
-        pending.append(PendingSafariDownload(url: link, kind: kind, name: name))
-
-        guard let data = try? JSONEncoder().encode(pending) else { return }
-        try? data.write(to: queueURL, options: .atomic)
-    }
-
-    private func sharedQueueURL() -> URL? {
-        FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?
-            .appendingPathComponent(queueFileName)
-    }
-
-    private func pendingDownloads(from queueURL: URL) -> [PendingSafariDownload] {
-        guard let data = try? Data(contentsOf: queueURL) else {
-            return []
-        }
-
-        if let downloads = try? JSONDecoder().decode([PendingSafariDownload].self, from: data) {
-            return downloads
-        }
-
-        if let legacyLinks = try? JSONDecoder().decode([String].self, from: data) {
-            return legacyLinks.map { PendingSafariDownload(url: $0, kind: nil, name: nil) }
-        }
-
-        return []
-    }
 }

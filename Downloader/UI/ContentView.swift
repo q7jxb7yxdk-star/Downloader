@@ -18,6 +18,8 @@ struct ContentView: View {
 
     /// 定期讀取 Safari extension 寫入 App Group 的待加入下載。
     @State private var safariQueueTimer: Timer?
+    @State private var safariQueueFlushInProgress = false
+    @State private var safariQueueWarning: String?
 
     var body: some View {
         NavigationSplitView {
@@ -69,12 +71,32 @@ struct ContentView: View {
                     }
                 }
         }
+        .safeAreaInset(edge: .bottom) {
+            if let warning = safariQueueWarning {
+                HStack {
+                    Label(warning, systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                    Spacer()
+                    Button("Retry") { flushPendingSafariDownloads() }
+                        .help("Retry pending Safari downloads. Retained entries are only removed after saving.")
+                }
+                .padding()
+                .background(.regularMaterial)
+            }
+        }
         .sheet(isPresented: $showingAddDownload) {
             AddDownloadSheet()
         }
         // `torrentFileSelection` 是 optional Identifiable，非 nil 時 SwiftUI 自動彈 sheet。
         .sheet(item: $downloadManager.torrentFileSelection) { selection in
             TorrentFileSelectionSheet(selection: selection)
+        }
+        .alert(item: $downloadManager.persistenceNotice) { notice in
+            Alert(
+                title: Text("Download Data"),
+                message: Text(notice.message),
+                dismissButton: .default(Text("OK"))
+            )
         }
         // 接收 App menu 的 Add Download command。
         .onReceive(NotificationCenter.default.publisher(for: .showAddDownload)) { _ in
@@ -158,52 +180,58 @@ struct ContentView: View {
     /// 讀取 Safari native extension 寫入 App Group 的下載 queue。
     @discardableResult
     private func flushPendingSafariDownloads() -> Bool {
-        struct PendingSafariDownload: Codable {
-            let url: String
-            let kind: String?
-            let name: String?
-        }
-
-        let appGroupIdentifier = "group.com.sunny.Downloader"
-        let queueFileName = "pending-safari-downloads.json"
-
-        guard let queueURL = FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?
-            .appendingPathComponent(queueFileName),
-              let data = try? Data(contentsOf: queueURL)
-        else {
+        guard !safariQueueFlushInProgress else { return false }
+        let queue: PendingSafariDownloadQueue
+        let entries: [PendingSafariDownloadQueue.Entry]
+        do {
+            queue = try PendingSafariDownloadQueue.appGroupQueue()
+            entries = try queue.snapshot()
+        } catch PendingSafariDownloadQueue.QueueError.lockUnavailable {
+            // Brief contention is retried by the periodic timer.
+            return false
+        } catch PendingSafariDownloadQueue.QueueError.invalidQueue {
+            safariQueueWarning = "The Safari download queue cannot be decoded. Its contents have been preserved for recovery."
+            return false
+        } catch {
+            safariQueueWarning = "Pending Safari downloads could not be read or saved. The app will retry automatically."
             return false
         }
-
-        let downloads: [PendingSafariDownload]
-        if let queuedDownloads = try? JSONDecoder().decode([PendingSafariDownload].self, from: data) {
-            downloads = queuedDownloads
-        } else if let legacyLinks = try? JSONDecoder().decode([String].self, from: data) {
-            downloads = legacyLinks.map { PendingSafariDownload(url: $0, kind: nil, name: nil) }
-        } else {
-            return false
+        safariQueueWarning = nil
+        guard !entries.isEmpty else { return false }
+        safariQueueFlushInProgress = true
+        selection = .all
+        Task { @MainActor in
+            defer { safariQueueFlushInProgress = false }
+            await Task.yield()
+            var importedIDs = Set<UUID>()
+            var invalidCount = 0
+            var failedImport = false
+            for entry in entries {
+                guard let url = URL(string: entry.url),
+                      ["http", "https", "magnet"].contains(url.scheme?.lowercased() ?? ""),
+                      entry.kind == nil || entry.kind.flatMap(DownloadKind.init(rawValue:)) != nil
+                else { invalidCount += 1; continue }
+                if downloadManager.importSafariDownload(
+                    id: entry.id, url: url, destination: FolderBookmarkStore.lastFolder(),
+                    kind: entry.kind.flatMap(DownloadKind.init(rawValue:)), name: entry.name
+                ) {
+                    importedIDs.insert(entry.id)
+                } else {
+                    failedImport = true
+                }
+            }
+            // Only persisted imports are removed. Failed acknowledgment safely retries using stable IDs.
+            if invalidCount > 0 {
+                safariQueueWarning = "Some pending Safari downloads contain unsupported or invalid data. They have been retained for recovery."
+            } else if failedImport {
+                safariQueueWarning = "Pending Safari downloads could not be saved. They remain queued and will retry automatically."
+            }
+            do { try queue.acknowledge(ids: importedIDs) }
+            catch {
+                safariQueueWarning = "Saved Safari downloads could not be acknowledged. The queue is retained and will retry without duplicating saved tasks."
+            }
+            if !importedIDs.isEmpty { bringDownloaderToFront() }
         }
-
-        guard !downloads.isEmpty else { return false }
-
-        if let emptyQueue = try? JSONEncoder().encode([PendingSafariDownload]()) {
-            try? emptyQueue.write(to: queueURL, options: .atomic)
-        }
-
-        let pendingDownloads = downloads.compactMap { download -> ExternalDownload? in
-            guard let url = URL(string: download.url) else { return nil }
-            return ExternalDownload(
-                url: url,
-                kind: download.kind.flatMap(DownloadKind.init(rawValue:)),
-                name: download.name
-            )
-        }
-        guard !pendingDownloads.isEmpty else { return false }
-
-        addExternalDownloads(
-            pendingDownloads.map { (url: $0.url, kind: $0.kind, name: $0.name) },
-            destination: FolderBookmarkStore.lastFolder()
-        )
         return true
     }
 

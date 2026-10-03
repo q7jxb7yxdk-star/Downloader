@@ -8,7 +8,8 @@ VCPKG_DIR="$BUILD_DIR/vcpkg"
 INSTALL_DIR="$BUILD_DIR/install"
 FRAMEWORK_DIR="$BUILD_DIR/framework"
 OUTPUT_XCFRAMEWORK="$VENDOR_DIR/libtorrent-rasterbar.xcframework"
-VCPKG_COMMIT="2025.04.09"
+# Immutable commit behind the previously used 2025.04.09 tag.
+VCPKG_COMMIT="ce613c41372b23b1f51333815feb3edd87ef8a8b"
 
 ARCHS=("arm64")
 
@@ -134,6 +135,14 @@ EOF
 #include <libtorrent/torrent_status.hpp>
 EOF
 
+  # Use the installed headers instead of claiming a hard-coded version.
+  local torrent_version
+  torrent_version="$(awk '/^#define LIBTORRENT_VERSION_(MAJOR|MINOR|TINY) / {printf "%s%s", separator, $3; separator="."}' "$prefix/include/libtorrent/version.hpp")"
+  if [[ ! "$torrent_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Unable to read the installed libtorrent version" >&2
+    exit 1
+  fi
+
   cat > "$framework/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -152,9 +161,9 @@ EOF
   <key>CFBundlePackageType</key>
   <string>FMWK</string>
   <key>CFBundleShortVersionString</key>
-  <string>2.0.12</string>
+  <string>$torrent_version</string>
   <key>CFBundleVersion</key>
-  <string>2.0.12</string>
+  <string>$torrent_version</string>
 </dict>
 </plist>
 EOF

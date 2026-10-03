@@ -1,5 +1,0 @@
-framework module libtorrent_rasterbar {
-  umbrella header "libtorrent_rasterbar.h"
-  export *
-  module * { export * }
-}
