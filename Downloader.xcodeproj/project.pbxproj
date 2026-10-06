@@ -7,9 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-        B10000000000000000000001 /* PendingSafariDownloadQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003; };
-        B10000000000000000000002 /* PendingSafariDownloadQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003; };
-        B10000000000000000000004 /* THIRD_PARTY_NOTICES.txt in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005; };
 		96A40A8F2FB0249000F5D6C9 /* Downloader Safari Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 96A40A772FB0249000F5D6C9 /* Downloader Safari Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA0000010000000000000001 /* App/DownloaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000101 /* App/DownloaderApp.swift */; };
 		AA0000010000000000000002 /* UI/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000102 /* UI/ContentView.swift */; };
@@ -32,6 +29,9 @@
 		AA0000010000000000000019 /* Torrent/TorrentFileSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000125 /* Torrent/TorrentFileSelection.swift */; };
 		AA0000010000000000000020 /* UI/TorrentFileSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000126 /* UI/TorrentFileSelectionSheet.swift */; };
 		AA0000010000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000127 /* Assets.xcassets */; };
+		B10000000000000000000001 /* Shared/PendingSafariDownloadQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* Shared/PendingSafariDownloadQueue.swift */; };
+		B10000000000000000000002 /* Shared/PendingSafariDownloadQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* Shared/PendingSafariDownloadQueue.swift */; };
+		B10000000000000000000004 /* Vendor/Libtorrent/THIRD_PARTY_NOTICES.txt in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* Vendor/Libtorrent/THIRD_PARTY_NOTICES.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,8 +59,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-        B10000000000000000000003 /* Shared/PendingSafariDownloadQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/PendingSafariDownloadQueue.swift; sourceTree = SOURCE_ROOT; };
-        B10000000000000000000005 /* THIRD_PARTY_NOTICES.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Vendor/Libtorrent/THIRD_PARTY_NOTICES.txt; sourceTree = SOURCE_ROOT; };
 		96A40A772FB0249000F5D6C9 /* Downloader Safari Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Downloader Safari Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000010000000000000100 /* Downloader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Downloader.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000010000000000000101 /* App/DownloaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/DownloaderApp.swift; sourceTree = "<group>"; };
@@ -90,6 +88,8 @@
 		AA0000010000000000000125 /* Torrent/TorrentFileSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Torrent/TorrentFileSelection.swift; sourceTree = "<group>"; };
 		AA0000010000000000000126 /* UI/TorrentFileSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/TorrentFileSelectionSheet.swift; sourceTree = "<group>"; };
 		AA0000010000000000000127 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B10000000000000000000003 /* Shared/PendingSafariDownloadQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/PendingSafariDownloadQueue.swift; sourceTree = SOURCE_ROOT; };
+		B10000000000000000000005 /* Vendor/Libtorrent/THIRD_PARTY_NOTICES.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Vendor/Libtorrent/THIRD_PARTY_NOTICES.txt; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -141,8 +141,8 @@
 			isa = PBXGroup;
 			children = (
 				AA0000010000000000000301 /* Downloader */,
-                B10000000000000000000003 /* Shared/PendingSafariDownloadQueue.swift */,
-                B10000000000000000000005 /* THIRD_PARTY_NOTICES.txt */,
+				B10000000000000000000003 /* Shared/PendingSafariDownloadQueue.swift */,
+				B10000000000000000000005 /* Vendor/Libtorrent/THIRD_PARTY_NOTICES.txt */,
 				AA0000010000000000000302 /* SafariExtension */,
 				AA0000010000000000000123 /* Vendor/Libtorrent/libtorrent-rasterbar.xcframework */,
 				AA0000010000000000000124 /* SystemConfiguration.framework */,
@@ -293,7 +293,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-                B10000000000000000000004 /* THIRD_PARTY_NOTICES.txt in Resources */,
+				B10000000000000000000004 /* Vendor/Libtorrent/THIRD_PARTY_NOTICES.txt in Resources */,
 				AA0000010000000000000021 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -305,7 +305,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-                B10000000000000000000002 /* PendingSafariDownloadQueue.swift in Sources */,
+				B10000000000000000000002 /* Shared/PendingSafariDownloadQueue.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -313,7 +313,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-                B10000000000000000000001 /* PendingSafariDownloadQueue.swift in Sources */,
+				B10000000000000000000001 /* Shared/PendingSafariDownloadQueue.swift in Sources */,
 				AA0000010000000000000001 /* App/DownloaderApp.swift in Sources */,
 				AA0000010000000000000002 /* UI/ContentView.swift in Sources */,
 				AA0000010000000000000003 /* UI/SidebarView.swift in Sources */,
@@ -354,7 +354,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = "Downloader Safari Extension/Downloader Safari Extension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20260918;
+				CURRENT_PROJECT_VERSION = 20261006;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = WX793X49GJ;
 				ENABLE_APP_SANDBOX = YES;
@@ -382,7 +382,7 @@
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -407,7 +407,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = "Downloader Safari Extension/Downloader Safari Extension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20260918;
+				CURRENT_PROJECT_VERSION = 20261006;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = WX793X49GJ;
 				ENABLE_APP_SANDBOX = YES;
@@ -436,7 +436,7 @@
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -587,7 +587,7 @@
 				CODE_SIGN_ENTITLEMENTS = Downloader/Downloader.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 20260918;
+				CURRENT_PROJECT_VERSION = 20261006;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = WX793X49GJ;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -612,7 +612,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lz",
@@ -637,7 +637,7 @@
 				CODE_SIGN_ENTITLEMENTS = Downloader/Downloader.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 20260918;
+				CURRENT_PROJECT_VERSION = 20261006;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = WX793X49GJ;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -663,7 +663,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lz",

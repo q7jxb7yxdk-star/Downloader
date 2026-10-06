@@ -1,6 +1,10 @@
 import Foundation
 import Darwin
 
+// Use a distinct Swift name to avoid Darwin's struct flock/function name collision.
+@_silgen_name("flock")
+private func pendingSafariQueueFlock(_ descriptor: Int32, _ operation: Int32) -> Int32
+
 /// Shared by the app and native extension. The separate lock file survives atomic queue replacement.
 struct PendingSafariDownloadQueue {
     struct Entry: Codable {
@@ -96,8 +100,8 @@ struct PendingSafariDownloadQueue {
         guard descriptor >= 0 else { throw QueueError.lockUnavailable }
         defer { Darwin.close(descriptor) }
         // Brief contention is retried by the app timer / extension caller, without blocking the UI.
-        guard Darwin.flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { throw QueueError.lockUnavailable }
-        defer { Darwin.flock(descriptor, LOCK_UN) }
+        guard pendingSafariQueueFlock(descriptor, LOCK_EX | LOCK_NB) == 0 else { throw QueueError.lockUnavailable }
+        defer { _ = pendingSafariQueueFlock(descriptor, LOCK_UN) }
         return try operation()
     }
 }

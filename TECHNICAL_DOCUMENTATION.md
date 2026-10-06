@@ -837,9 +837,14 @@ listener recognizes:
 - Links with a `download` attribute.
 - `magnet:` links.
 - HTTP/HTTPS links ending in common downloadable file extensions, including
-  `.torrent`.
+  `.torrent`, excluding ordinary image URLs.
 - Torrent links and buttons identified by `application/x-bittorrent`, a
   `.torrent` filename, torrent labels, or torrent-related data attributes.
+
+Both JavaScript classifiers exclude image extensions from automatic URL capture,
+including image filenames in signed-URL query parameters. Ordinary image links
+and image tabs stay in Safari. A link with an explicit `download` attribute or
+the `Download with Downloader` context menu can still queue an image.
 
 Eligible clicks are cancelled before Safari starts its own navigation, then sent
 to `background.js` with the `auto-capture-download` message. The background
@@ -879,7 +884,10 @@ without downloading the whole file. A `.torrent` filename or
 `application/x-bittorrent` response is queued as BT. A response that resolves to
 a known downloadable extension or download content type, such as
 `application/octet-stream` or `application/x-apple-diskimage`, is queued as a
-normal HTTP download. If the probe does not identify a download,
+normal HTTP download. Image responses, identified by an `image/` media type or
+an image filename extension, require `Content-Disposition: attachment` before
+being classified as HTTP downloads. Inline images remain in Safari.
+If the probe does not identify a download,
 `download-probe-result` tells the injected script to continue the original
 Safari navigation. The probe has a 10-second timeout.
 
@@ -979,7 +987,13 @@ The main app listens in `ContentView`, then `flushPendingSafariDownloads()`:
 4. Re-reads the queue under the lock and acknowledges only successfully saved IDs, preserving concurrently appended and failed entries.
 5. Brings Downloader to the foreground after successful imports.
 
-`Shared/PendingSafariDownloadQueue.swift` is compiled into both targets. Failed
+`Shared/PendingSafariDownloadQueue.swift` is compiled into both targets. It uses
+a separate `.lock` file with `flock(LOCK_EX | LOCK_NB)` and deferred `LOCK_UN`;
+the lock remains valid when the JSON queue is atomically replaced. A private
+`pendingSafariQueueFlock` declaration binds to the system `flock` symbol through
+`@_silgen_name("flock")`, avoiding the Swift name collision with Darwin's
+`struct flock`. The binding uses `Int32` parameters and return value to match
+the C `int` signature. Failed
 acknowledgments retry without restarting tasks whose UUIDs are already saved.
 Invalid/corrupt entries are retained with a warning. Native messaging reports
 queue acceptance only after the queue save; content scripts fall back to browser

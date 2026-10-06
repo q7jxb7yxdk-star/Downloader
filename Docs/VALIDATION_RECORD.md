@@ -54,3 +54,10 @@ Copy this section for each manual pass; do not mark pending rows passed based on
 | Trash / restore / bookmarks / permissions | Pending |
 | Bundle notices / signing / release artifacts | Pending |
 | Failures / redacted evidence / disposition | Pending |
+
+## 2026-10-04 manual-only maintenance
+
+- User reported cancelling the schedule and requested manual maintenance. Local automations directory inspected with no entries; no account-wide schedule visibility or privacy audit performed.
+- Current plans, registry and backlog updated to manual-only execution with no next scheduled opportunity; no new automation created. Earlier schedule entries remain historical and superseded.
+- Existing per-project successful periods and pending inspection/runtime findings preserved; this document update does not complete a monthly or quarterly audit.
+- The four central records remain ignored by Git. No app/source/service changes, Build/Test, Commit or Push performed.

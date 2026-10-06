@@ -217,8 +217,12 @@ To use it:
 
 Automatic capture is enabled by default and can be changed in Downloader
 Settings. It recognizes links with a `download` attribute, magnet links, and
-common file extensions. Torrent buttons and links can also be recognized from
-their MIME type, filename, label, or torrent-related data attributes, even when
+common file extensions. Ordinary image links and image tabs remain in Safari;
+images can still be downloaded through an explicit `download` link or the
+`Download with Downloader` context menu. Probed image responses are captured
+only when their `Content-Disposition` specifies `attachment`. Torrent buttons
+and links can also be recognized from their MIME type, filename, label, or
+torrent-related data attributes, even when
 the endpoint URL does not end in `.torrent`. Ambiguous `/file/` and `/download`
 links are checked with a one-byte Range request; Downloader captures the link
 when its response headers identify a Torrent file or a normal downloadable file
@@ -227,7 +231,8 @@ JavaScript, authenticated POST requests, or `blob:` URLs may still require
 Safari's own download flow.
 
 Direct file URLs opened in Safari by another app, such as Telegram, are also
-captured when they end in a known downloadable extension. Redirected signed
+captured when they end in a known downloadable extension, excluding images.
+Redirected signed
 asset URLs, such as GitHub release downloads whose filename is stored in
 `response-content-disposition` or `rscd`, are also recognized. Downloader opens
 in the foreground and Safari closes the temporary download tab. Duplicate
@@ -296,6 +301,16 @@ Local static checks (no app build or tests):
 ```zsh
 python3 Scripts/validate_static.py --swift-syntax
 ```
+
+The shared Safari queue can also be checked for Swift type errors without an
+app build:
+
+```zsh
+swiftc -typecheck Shared/PendingSafariDownloadQueue.swift
+```
+
+These checks do not verify linking, app behavior, or Safari integration. Run the
+app and extension builds and manual regression checks in Xcode separately.
 
 The shipped Safari extension uses `Downloader Safari Extension/Resources`.
 `SafariExtension/` is a retained reference prototype, not the shipped resource source.

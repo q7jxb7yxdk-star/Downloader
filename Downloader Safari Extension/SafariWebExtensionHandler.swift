@@ -10,6 +10,10 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         "tar", "torrent", "tsv", "txt", "wav", "webm", "webp", "xls", "xlsx",
         "xz", "zip"
     ]
+    private static let imageExtensions: Set<String> = [
+        "apng", "avif", "bmp", "gif", "heic", "heif", "ico", "jpeg", "jpg",
+        "png", "svg", "tif", "tiff", "webp"
+    ]
     private static let duplicateWindow: TimeInterval = 3
 
     private struct DownloadProbeResult {
@@ -226,9 +230,19 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                     ?? response.url.flatMap { Self.downloadablePathFileName(from: $0) }
                 isTorrent = contentType.localizedCaseInsensitiveContains("application/x-bittorrent")
                     || fileName?.lowercased().hasSuffix(".torrent") == true
-                isDownload = isTorrent
-                    || fileName.map(Self.hasDownloadableExtension) == true
-                    || Self.isDownloadContentType(contentType)
+                let mediaType = contentType.split(separator: ";", maxSplits: 1)
+                    .first?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+                let isImage = mediaType.hasPrefix("image/")
+                    || fileName.map { Self.imageExtensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) } == true
+                let isAttachment = disposition.split(separator: ";", maxSplits: 1)
+                    .first?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "attachment"
+                if isImage {
+                    isDownload = isAttachment
+                } else {
+                    isDownload = isTorrent
+                        || fileName.map(Self.hasDownloadableExtension) == true
+                        || Self.isDownloadContentType(contentType)
+                }
                 os_log(.default, "Download probe response: %{public}ld", response.statusCode)
             } else {
                 isTorrent = false

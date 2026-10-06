@@ -6,6 +6,12 @@ const downloadableExtensions = new Set([
   "xz", "zip"
 ]);
 
+// Browsable images need an explicit download action before capture.
+const imageExtensions = new Set([
+  "apng", "avif", "bmp", "gif", "heic", "heif", "ico", "jpeg", "jpg",
+  "png", "svg", "tif", "tiff", "webp"
+]);
+
 let automaticallyCaptureDownloads = true;
 const pendingProbes = new Map();
 const capturedPageURLs = new Map();
@@ -257,7 +263,10 @@ function isKnownDownloadURL(url) {
 
   const fileName = url.pathname.split("/").pop() || "";
   const extension = fileName.includes(".") ? fileName.split(".").pop().toLowerCase() : "";
-  return downloadableExtensions.has(extension) || downloadableFileNameFromQuery(url) !== null;
+  const queryFileName = downloadableFileNameFromQuery(url);
+  const queryExtension = queryFileName ? queryFileName.split(".").pop().toLowerCase() : "";
+  return (downloadableExtensions.has(extension) && !imageExtensions.has(extension))
+    || (queryFileName !== null && !imageExtensions.has(queryExtension));
 }
 
 function torrentURLPattern(url) {

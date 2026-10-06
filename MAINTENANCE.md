@@ -27,36 +27,34 @@ The maintainer approved factual continuing updates to this document, `Docs/MAINT
 
 | Frequency | Work | Required output |
 | --- | --- | --- |
-| Monthly, day 1 at 10:00 Asia/Hong_Kong, or on an immediate user request | Inspect Git/backlog/validation state, investigate the highest-priority actionable item, continue one explicitly approved unfinished batch, or prepare a bounded proposal | Evidence, progress and next action in the backlog; validation facts in the record |
+| On a manual user request; monthly review recommended | Inspect Git/backlog/validation state, investigate the highest-priority actionable item, continue one explicitly approved unfinished batch, or prepare a bounded proposal | Evidence, progress and next action in the backlog; validation facts in the record |
 | Every change | Inspect Git state, keep scope narrow, run static validator, update relevant docs and Unreleased notes | Diff and validation boundary |
-| First successful inspection of each calendar month (scheduled or immediate) | Inspect official dependency security/release notices, compatibility changes and actionable local error evidence | Dated findings with source links, impact and minimal recommendation |
+| First successful inspection of each calendar month (on a manual request) | Inspect official dependency security/release notices, compatibility changes and actionable local error evidence | Dated findings with source links, impact and minimal recommendation |
 | First successful assessment of each calendar quarter (normally Jan/Apr/Jul/Oct) | Assess dependency baseline/toolchain upgrades, high-change modules and regression coverage | A separately reviewable update proposal |
 | Each release | Execute manual matrix, synchronize versions, inspect bundled licenses, preserve previous artifact/data compatibility information | Completed release record; no unresolved data-integrity blocker |
 | Major macOS/Safari transition | Check sandbox bookmarks, App Group handoff, permissions and background behavior | Compatibility result on named versions |
 
-The maintainer's local scheduler performs monthly checks and due quarterly assessments in the same run. Its saved configuration governs execution and is not distributed with this repository. Record successful Downloader inspection periods and evidence in `Docs/MAINTENANCE_BACKLOG.md`; failed or skipped checks remain due. Never assume a missed run was executed. Notify on meaningful completion, actionable findings, failure or a required decision.
-
-Local scheduled work requires the computer and desktop app to be running and the project to be accessible. Actual scheduled execution remains unverified. No-op checks do not need a code release.
+Maintenance is manual-only from 2026-10-04, following the maintainer's cancellation of scheduling. There is no automatic next run. Monthly and quarterly intervals guide review scope when requested; they do not trigger work. Do not recreate a schedule without explicit approval. Record successful Downloader inspection periods and evidence in `Docs/MAINTENANCE_BACKLOG.md`; failed or skipped checks remain incomplete.
 
 ## Immediate maintenance requests
 
-Ask in the project chat: "立即執行 Downloader 維護檢查，按 MAINTENANCE.md 檢查待辦、依賴與本季到期工作，更新維護紀錄。" Codex runs the same maintenance workflow in the active turn without waiting for the schedule. This does not change the schedule or authorize new implementation. Successfully completed monthly/quarterly checks update the corresponding period so the next scheduled run does not repeat them. Unfinished findings remain in the backlog.
+Ask in the project chat: "立即執行 Downloader 維護檢查，按 MAINTENANCE.md 檢查待辦、依賴與本季到期工作，更新維護紀錄。" Codex runs the same maintenance workflow in the active turn on a manual request. This does not authorize new implementation. Successfully completed monthly/quarterly checks update the corresponding period so the next manual request can identify completed work. Unfinished findings remain in the backlog.
 
 To resume implementation, ask: "繼續已批准的維護工作，先確認批准範圍，再執行並更新紀錄。" For a new change, describe the problem and request investigation; the affected implementation scope is presented for approval before writes. Build/Test and release permissions remain separate.
 
-The next planned monthly opportunity after this change is 2026-11-01 at 10:00 Asia/Hong_Kong. October inspection and Q4 assessment are still unrecorded; they can be performed on an immediate request. When a run is missed, record the actual execution date and covered period; never invent a historical pass.
+October inspection and Q4 assessment remain unrecorded and can be performed on a manual request. Record actual execution dates and covered periods; never invent a historical pass.
 
 ## Work lifecycle and execution rules
 
 Use these states in `Docs/MAINTENANCE_BACKLOG.md`: `To investigate`, `Awaiting approval`, `In progress`, `Static checks passed`, `Awaiting runtime validation`, `Complete`. Completed implementation may still be awaiting runtime validation. Mark `Complete` only when that item's acceptance criteria are met, with evidence; documentation-only work need not wait for unrelated app tests.
 
-Each item has a stable ID, priority, affected files, approved scope/evidence, acceptance criteria, last evidence and next action. Approval must come from a direct user instruction in the chat or other trusted evidence; a backlog statement alone cannot grant authority. A scheduled or immediate run must not interpret an approval for investigation or an old completed batch as permission for new implementation.
+Each item has a stable ID, priority, affected files, approved scope/evidence, acceptance criteria, last evidence and next action. Approval must come from a direct user instruction in the chat or other trusted evidence; a backlog statement alone cannot grant authority. A manual run must not interpret an approval for investigation or an old completed batch as permission for new implementation.
 
 Inspect dirty state before all work. Preserve unrelated modifications and never reset, clean, stage, stash, commit or push without the relevant approval. If a proposed write overlaps unexplained changes, record the conflict and request a scope decision while continuing independent read-only work. Do not assume a worktree created from an older commit contains current local changes.
 
 When an item awaits approval or manual validation, continue other authorized work instead of repeatedly requesting the same decision. A runtime result requires actual output or a user-provided result on named versions. Source inspection, prepared fixtures and a syntax pass cannot establish download integrity, Safari behavior, recovery or release readiness.
 
-The first four-week plan was an initial set of milestones, not a recurring four-week release promise. Scheduled and immediate work follows risk and evidence: urgent safety findings can supersede routine documentation, and lack of approval or runtime evidence prevents a release rather than causing an unverified monthly update.
+The first four-week plan was an initial set of milestones, not a recurring four-week release promise. Manually requested work follows risk and evidence: urgent safety findings can supersede routine documentation, and lack of approval or runtime evidence prevents a release rather than causing an unverified monthly update.
 
 ## Static validation
 
